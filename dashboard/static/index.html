@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gold Metrics Dashboard</title>
+  <style>
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ddd;padding:8px}
+    th{background:#f4f4f7}
+    pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+  <h1>Gold Metrics (Medallion)</h1>
+  <p>Prototype dashboard showing `stage#gold` payloads from DynamoDB.</p>
+  <table id="metrics">
+    <thead><tr><th>When</th><th>Metric</th><th>Payload</th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <script>
+    async function load() {
+      try {
+        const res = await fetch('/api/gold');
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        const tbody = document.querySelector('#metrics tbody');
+        tbody.innerHTML = '';
+        data.forEach(item => {
+          const tr = document.createElement('tr');
+          const when = new Date(item.when*1000 || Date.now()).toISOString();
+          const metric = item.metric || JSON.stringify(item.metric || '');
+          const payload = document.createElement('pre');
+          payload.textContent = JSON.stringify(item, null, 2);
+          tr.innerHTML = `<td>${when}</td><td>${metric}</td>`;
+          const td = document.createElement('td');
+          td.appendChild(payload);
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+        });
+      } catch(e){
+        document.body.appendChild(document.createElement('pre')).textContent = String(e);
+      }
+    }
+    load();
+  </script>
+</body>
+</html>
