@@ -1,16 +1,20 @@
-// This is a prototype for using DynamoDB in Rust.
+// DynamoDB idempotency prototype with an initial medallion pipeline flow.
+//
+// The pipeline keeps exactly-once ingestion and writes stage records:
+// - Bronze: raw event payload
+// - Silver: normalized/enriched event
+// - Gold: derived metrics for reporting/alerts
 
-// Functional Requirements:
-// 1) Use the AWS SDK for Rust to interact with DynamoDB.
-// 2) Connect to DynamoDB and perform basic CRUD operations (Create, Read, Update, Delete).
-// 3) Handle errors gracefully and provide meaningful error messages.
-
-// Purpose:
-// The ultimate goal of this prototype is to facilitate idempotency in a log forwarding pipeline from AWS Cloudtrail logs from a lambda function to a Splunk HEC endpoint.
-// The DynamoDB table will be used to store the state of processed log entries, ensuring that each log entry is processed only once, even in the case of retries or failures.
+mod bronze;
+mod gold;
+mod ingest;
+mod models;
+mod sink;
+mod silver;
 
 use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
 use aws_sdk_dynamodb::{error::SdkError, types::AttributeValue, Client};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -106,6 +110,13 @@ fn build_idempotency_key(event_id: &str) -> HashMap<String, AttributeValue> {
     let mut key = HashMap::new();
     key.insert("pk".to_string(), AttributeValue::S(event_id.to_string()));
     key.insert("sk".to_string(), AttributeValue::S("state".to_string()));
+    key
+}
+
+fn build_stage_key(event_id: &str, stage: &str) -> HashMap<String, AttributeValue> {
+    let mut key = HashMap::new();
+    key.insert("pk".to_string(), AttributeValue::S(event_id.to_string()));
+    key.insert("sk".to_string(), AttributeValue::S(format!("stage#{stage}")));
     key
 }
 
@@ -223,15 +234,37 @@ async fn increment_duplicate_count(
     .await
 }
 
-// Not required, implemented in seperate module.
-// async fn send_to_splunk_hec(_event_id: &str) -> Result<(), String> {
-//     // Replace this stub with a real HTTP request to the Splunk HEC endpoint.
-//     Ok(())
-// }
+fn to_json_payload<T: Serialize>(value: &T) -> String {
+    match serde_json::to_string(value) {
+        Ok(payload) => payload,
+        Err(err) => {
+            eprintln!("Failed to serialize stage payload: {err}");
+            "{}".to_string()
+        }
+    }
+}
 
-async fn process_cloudtrail_event(client: &Client) -> Result<(), aws_sdk_dynamodb::Error> {
+async fn persist_stage_record(
+    client: &Client,
+    table_name: &str,
+    event_id: &str,
+    stage: &str,
+    payload_json: &str,
+) -> Result<(), aws_sdk_dynamodb::Error> {
+    let mut item = build_stage_key(event_id, stage);
+    item.insert("payload".to_string(), AttributeValue::S(payload_json.to_string()));
+    item.insert(
+        "created_at".to_string(),
+        AttributeValue::N(epoch_seconds().to_string()),
+    );
+
+    create_item(client, table_name, item).await
+}
+
+async fn process_medallion_pipeline(client: &Client) -> Result<(), aws_sdk_dynamodb::Error> {
     let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
-    let event_id = std::env::var("EVENT_ID").unwrap_or_else(|_| "event-123".to_string());
+    let event = ingest::load_event_from_env(epoch_seconds());
+    let event_id = event.event_id.clone();
     let ttl_seconds = std::env::var("DDB_TTL_SECONDS")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
@@ -245,7 +278,19 @@ async fn process_cloudtrail_event(client: &Client) -> Result<(), aws_sdk_dynamod
         return Ok(());
     }
 
-    match send_to_splunk_hec(&event_id).await {
+    let bronze = bronze::to_bronze(&event, epoch_seconds());
+    let bronze = to_json_payload(&bronze);
+    persist_stage_record(client, &table_name, &event_id, "bronze", &bronze).await?;
+
+    let silver = silver::to_silver(&event, epoch_seconds());
+    let silver_json = to_json_payload(&silver);
+    persist_stage_record(client, &table_name, &event_id, "silver", &silver_json).await?;
+
+    let gold = gold::to_gold(&silver, epoch_seconds());
+    let gold_json = to_json_payload(&gold);
+    persist_stage_record(client, &table_name, &event_id, "gold", &gold_json).await?;
+
+    match sink::send_to_splunk_hec(&gold_json).await {
         Ok(()) => {
             mark_processed(client, &table_name, &event_id).await?;
             println!("Event processed: {event_id}");
@@ -313,7 +358,7 @@ async fn main() {
     let result = if run_demo {
         demo_crud_operations(&client).await
     } else {
-        process_cloudtrail_event(&client).await
+        process_medallion_pipeline(&client).await
     };
 
     if let Err(error) = result {
