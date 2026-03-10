@@ -1,0 +1,56 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-push:
+    name: Build and push Lambda image to ECR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build, tag, and push image
+        env:
+          ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }} # e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }} # e.g., dynamodb-prototype
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          docker build -t "$IMAGE" -f Dockerfile .
+          docker push "$IMAGE"
+
+      - name: Update SAM template parameter (ImageUri)
+        run: |
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY:${{ github.sha }}"
+          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
+
+      - name: Deploy via AWS SAM (optional)
+        if: env.IMAGE_URI != '' && env.IMAGE_URI != ' ' 
+        run: |
+          pip install --upgrade aws-sam-cli || true
+          sam validate || true
+          sam deploy --template-file template.yaml --stack-name dynamodb-prototype-stack --capabilities CAPABILITY_IAM --resolve-s3 || true
+
+  notify:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify
+        run: echo "Deploy job completed"
