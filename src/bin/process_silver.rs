@@ -1,16 +1,11 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
 use serde_json::{json, Value};
+use dynamodb_prototype::processing::normalize_amount;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn normalize_amount(v: &Value) -> Option<f64> {
-    match v {
-        Value::Number(n) => n.as_f64(),
-        Value::String(s) => s.parse::<f64>().ok(),
-        _ => None,
-    }
-}
+// use normalize_amount from processing
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {

@@ -3,51 +3,12 @@ use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use reqwest::Client as HttpClient;
 use serde_json::{json, Map, Value};
+use dynamodb_prototype::processing::{remove_nulls, apply_defaults, normalize_amount};
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn remove_nulls(v: &mut Value) {
-    match v {
-        Value::Object(map) => {
-            let keys: Vec<String> = map.keys().cloned().collect();
-            for k in keys {
-                if let Some(mut vv) = map.remove(&k) {
-                    remove_nulls(&mut vv);
-                    match &vv {
-                        Value::Null => {}
-                        _ => {
-                            map.insert(k, vv);
-                        }
-                    }
-                }
-            }
-        }
-        Value::Array(arr) => {
-            arr.retain(|x| !x.is_null());
-            for x in arr.iter_mut() {
-                remove_nulls(x);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn apply_defaults(obj: &mut Map<String, Value>) {
-    if !obj.contains_key("event_type") {
-        obj.insert("event_type".to_string(), Value::String("unknown".to_string()));
-    }
-    if !obj.contains_key("created_at") {
-        let now = chrono::Utc::now().to_rfc3339();
-        obj.insert("created_at".to_string(), Value::String(now));
-    }
-    if !obj.contains_key("when") {
-        if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            obj.insert("when".to_string(), Value::Number(serde_json::Number::from(now.as_secs())));
-        }
-    }
-}
 
 async fn ingest_samples(client: &Client, table: &str) -> Result<(), anyhow::Error> {
     let data_dir = Path::new("data/sample");
@@ -132,13 +93,7 @@ async fn clean_bronze(client: &Client, table: &str) -> Result<(), anyhow::Error>
     Ok(())
 }
 
-fn normalize_amount(v: &Value) -> Option<f64> {
-    match v {
-        Value::Number(n) => n.as_f64(),
-        Value::String(s) => s.parse::<f64>().ok(),
-        _ => None,
-    }
-}
+// normalization helpers provided by `processing` lib
 
 async fn promote_silver(client: &Client, table: &str) -> Result<(), anyhow::Error> {
     let mut expr_vals = HashMap::new();

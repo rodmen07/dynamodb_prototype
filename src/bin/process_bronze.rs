@@ -1,52 +1,11 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
 use serde_json::{Map, Value};
+use dynamodb_prototype::processing::{remove_nulls, apply_defaults};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-fn remove_nulls(v: &mut Value) {
-    match v {
-        Value::Object(map) => {
-            let keys: Vec<String> = map.keys().cloned().collect();
-            for k in keys {
-                if let Some(mut vv) = map.remove(&k) {
-                    remove_nulls(&mut vv);
-                    match &vv {
-                        Value::Null => {}
-                        _ => {
-                            map.insert(k, vv);
-                        }
-                    }
-                }
-            }
-        }
-        Value::Array(arr) => {
-            arr.retain(|x| !x.is_null());
-            for x in arr.iter_mut() {
-                remove_nulls(x);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn apply_defaults(obj: &mut Map<String, Value>) {
-    // default event_type
-    if !obj.contains_key("event_type") {
-        obj.insert("event_type".to_string(), Value::String("unknown".to_string()));
-    }
-    // default created_at
-    if !obj.contains_key("created_at") {
-        let now = chrono::Utc::now().to_rfc3339();
-        obj.insert("created_at".to_string(), Value::String(now));
-    }
-    // default when (epoch seconds)
-    if !obj.contains_key("when") {
-        if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
-            obj.insert("when".to_string(), Value::Number(serde_json::Number::from(now.as_secs())));
-        }
-    }
-}
+// cleaning and defaults are provided by `processing` lib
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
