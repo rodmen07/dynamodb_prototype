@@ -23,10 +23,13 @@ async fn list_stage(
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
 
     let mut out = vec![];
-    if let Some(items) = resp.items() {
+    let items = resp.items();
+    if items.is_empty() {
+        // no items
+    } else {
         for it in items {
             if let Some(payload_attr) = it.get("payload") {
-                if let Some(s) = payload_attr.as_s() {
+                if let Ok(s) = payload_attr.as_s() {
                     if let Ok(json) = serde_json::from_str::<Value>(s) {
                         out.push(json);
                         continue;
@@ -39,7 +42,7 @@ async fn list_stage(
                 let j = match v {
                     AttributeValue::S(s) => Value::String(s.clone()),
                     AttributeValue::N(n) => Value::String(n.clone()),
-                    _ => Value::String(format!("<{}>", v.as_s().unwrap_or(""))),
+                    _ => Value::String(format!("<{}>", v.as_s().ok().map(|s| s.as_str()).unwrap_or(""))),
                 };
                 m.insert(k.clone(), j);
             }
@@ -48,6 +51,45 @@ async fn list_stage(
     }
 
     Ok(Json(out))
+}
+
+async fn list_stats(client: Client) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+
+    // Scan only the `sk` attribute to build simple counts per stage prefix
+    let resp = client
+        .scan()
+        .table_name(table_name)
+        .projection_expression("sk")
+        .send()
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    let items = resp.items();
+    if items.is_empty() {
+        // no items
+    } else {
+        for it in items {
+            if let Some(sk_attr) = it.get("sk") {
+                if let Ok(s) = sk_attr.as_s() {
+                    if s.starts_with("stage#bronze_cleaned") {
+                        *counts.entry("bronze_cleaned".to_string()).or_default() += 1;
+                    } else if s.starts_with("stage#bronze") {
+                        *counts.entry("bronze".to_string()).or_default() += 1;
+                    } else if s.starts_with("stage#silver") {
+                        *counts.entry("silver".to_string()).or_default() += 1;
+                    } else if s.starts_with("stage#gold") {
+                        *counts.entry("gold".to_string()).or_default() += 1;
+                    } else {
+                        *counts.entry("other".to_string()).or_default() += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({"counts": counts})))
 }
 
 async fn index_html() -> Html<&'static str> {
@@ -72,6 +114,13 @@ async fn main() {
         .route("/", get(index_html))
         .route("/bronze", get(bronze_html))
         .route("/silver", get(silver_html))
+        .route("/api/stats", get({
+            let client = client.clone();
+            move || {
+                let client = client.clone();
+                async move { list_stats(client).await }
+            }
+        }))
         .route("/api/gold", get({
             let client = client.clone();
             move || {

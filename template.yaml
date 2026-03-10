@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: |
+  SAM template (prototype). Builds are not automated here; use `cargo lambda` or
+  a container image. This template provides example Lambda functions that map
+  to the processing binaries in this repo.
+
+Resources:
+  ProcessBronzeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dynamodb-prototype-process-bronze
+      Description: Cleans Bronze records and writes cleaned items (stage#bronze_cleaned)
+      PackageType: Image
+      # Build an image that runs the `process_bronze` binary (placeholder)
+      ImageUri: <REPLACE_WITH_BUILT_IMAGE_URI>
+      Timeout: 60
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoTable
+
+  ProcessSilverFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dynamodb-prototype-process-silver
+      Description: Promotes cleaned bronze records to Silver
+      PackageType: Image
+      ImageUri: <REPLACE_WITH_BUILT_IMAGE_URI>
+      Timeout: 60
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoTable
+
+  RunPipelineFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: dynamodb-prototype-run-pipeline
+      Description: Orchestrator (ingest→bronze_clean→silver→gold) — for small batches
+      PackageType: Image
+      ImageUri: <REPLACE_WITH_BUILT_IMAGE_URI>
+      Timeout: 300
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DynamoTable
+
+  DynamoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: example_table
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+
+Outputs:
+  TableName:
+    Value: !Ref DynamoTable
+    Description: DynamoDB table used by the prototype

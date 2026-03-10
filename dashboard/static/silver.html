@@ -15,6 +15,7 @@
 <body>
   <h1>Silver Events</h1>
   <p>Enriched/cleaned events (Silver stage).</p>
+  <div id="summary" style="margin-bottom:12px">Loading summary…</div>
   <table id="metrics">
     <thead><tr><th>When</th><th>Type</th><th>Payload</th></tr></thead>
     <tbody></tbody>
@@ -39,11 +40,23 @@
           tr.appendChild(td);
           tbody.appendChild(tr);
         });
-      } catch(e){
+          }
+          catch(e){
         document.body.appendChild(document.createElement('pre')).textContent = String(e);
       }
     }
-    load();
+        async function loadAll(){
+          await load();
+          try{
+            const s = await fetch('/api/stats');
+            const js = await s.json();
+            const div = document.getElementById('summary');
+            if(js.counts){
+              div.textContent = 'Silver: ' + (js.counts.silver || 0) + ', Gold: ' + (js.counts.gold || 0);
+            }
+          }catch(e){ console.warn(e); }
+        }
+        loadAll();
   </script>
 </body>
 </html>

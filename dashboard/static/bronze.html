@@ -15,6 +15,7 @@
 <body>
   <h1>Bronze Records</h1>
   <p>Raw ingested events (Bronze stage).</p>
+  <div id="summary" style="margin-bottom:12px">Loading summary…</div>
   <table id="metrics">
     <thead><tr><th>PK</th><th>SK</th><th>Payload</th></tr></thead>
     <tbody></tbody>
@@ -39,11 +40,23 @@
           tr.appendChild(td);
           tbody.appendChild(tr);
         });
-      } catch(e){
+          }
+          catch(e){
         document.body.appendChild(document.createElement('pre')).textContent = String(e);
       }
     }
-    load();
+        async function loadAll(){
+          await load();
+          try{
+            const s = await fetch('/api/stats');
+            const js = await s.json();
+            const div = document.getElementById('summary');
+            if(js.counts){
+              div.textContent = 'Bronze: ' + (js.counts.bronze || 0) + ', cleaned: ' + (js.counts.bronze_cleaned || 0);
+            }
+          }catch(e){ console.warn(e); }
+        }
+        loadAll();
   </script>
 </body>
 </html>

@@ -71,16 +71,16 @@ async fn ingest_samples(client: &Client, table: &str) -> Result<(), anyhow::Erro
         let sk = format!("stage#bronze#{}", now);
 
         client
-+            .put_item()
-+            .table_name(table)
-+            .item("pk", AttributeValue::S(pk.clone()))
-+            .item("sk", AttributeValue::S(sk.clone()))
-+            .item("payload", AttributeValue::S(content.clone()))
-+            .item("when", AttributeValue::N(now.to_string()))
-+            .send()
-+            .await?;
-+
-+        println!("ingest: wrote {} {}", pk, sk);
+            .put_item()
+            .table_name(table)
+            .item("pk", AttributeValue::S(pk.clone()))
+            .item("sk", AttributeValue::S(sk.clone()))
+            .item("payload", AttributeValue::S(content.clone()))
+            .item("when", AttributeValue::N(now.to_string()))
+            .send()
+            .await?;
+
+        println!("ingest: wrote {} {}", pk, sk);
     }
     Ok(())
 }
@@ -97,10 +97,13 @@ async fn clean_bronze(client: &Client, table: &str) -> Result<(), anyhow::Error>
         .send()
         .await?;
 
-    if let Some(items) = resp.items() {
+    let items = resp.items();
+    if items.is_empty() {
+        println!("No sample data items found");
+    } else {
         for it in items {
-            let pk = it.get("pk").and_then(|v| v.as_s().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
-            let payload = it.get("payload").and_then(|v| v.as_s().map(|s| s.to_string()));
+            let pk = it.get("pk").and_then(|v| v.as_s().ok().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
+            let payload = it.get("payload").and_then(|v| v.as_s().ok().map(|s| s.to_string()));
             if let Some(s) = payload {
                 if let Ok(mut json) = serde_json::from_str::<Value>(&s) {
                     remove_nulls(&mut json);
@@ -149,10 +152,13 @@ async fn promote_silver(client: &Client, table: &str) -> Result<(), anyhow::Erro
         .send()
         .await?;
 
-    if let Some(items) = resp.items() {
+    let items = resp.items();
+    if items.is_empty() {
+        println!("No bronze items found");
+    } else {
         for it in items {
-            let pk = it.get("pk").and_then(|v| v.as_s().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
-            let payload = it.get("payload_cleaned").and_then(|v| v.as_s().map(|s| s.to_string()));
+            let pk = it.get("pk").and_then(|v| v.as_s().ok().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
+            let payload = it.get("payload_cleaned").and_then(|v| v.as_s().ok().map(|s| s.to_string()));
             if let Some(s) = payload {
                 if let Ok(json_val) = serde_json::from_str::<Value>(&s) {
                     let event_type = json_val.get("event_type").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
@@ -212,10 +218,13 @@ async fn promote_gold_and_sink(client: &Client, http: &HttpClient, table: &str) 
     let splunk_url = std::env::var("SPLUNK_HEC_URL").ok();
     let splunk_token = std::env::var("SPLUNK_HEC_TOKEN").ok();
 
-    if let Some(items) = resp.items() {
+    let items = resp.items();
+    if items.is_empty() {
+        println!("No bronze_cleaned items found");
+    } else {
         for it in items {
-            let pk = it.get("pk").and_then(|v| v.as_s().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
-            let payload = it.get("payload").and_then(|v| v.as_s().map(|s| s.to_string()));
+            let pk = it.get("pk").and_then(|v| v.as_s().ok().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
+            let payload = it.get("payload").and_then(|v| v.as_s().ok().map(|s| s.to_string()));
             if let Some(s) = payload {
                 if let Ok(json_val) = serde_json::from_str::<Value>(&s) {
                     // example metric extraction: revenue or event_count

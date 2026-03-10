@@ -69,11 +69,14 @@ async fn main() -> Result<(), anyhow::Error> {
         .send()
         .await?;
 
-    if let Some(items) = resp.items() {
+    let items = resp.items();
+    if items.is_empty() {
+        println!("No bronze items found");
+    } else {
         for it in items {
             // skip already-cleaned markers by checking sk value pattern; keep processing generic
-            let pk = it.get("pk").and_then(|v| v.as_s().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
-            let payload = it.get("payload").and_then(|v| v.as_s().map(|s| s.to_string()));
+            let pk = it.get("pk").and_then(|v| v.as_s().ok().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
+            let payload = it.get("payload").and_then(|v| v.as_s().ok().map(|s| s.to_string()));
 
             if let Some(mut s) = payload {
                 match serde_json::from_str::<Value>(&s) {
@@ -87,30 +90,27 @@ async fn main() -> Result<(), anyhow::Error> {
                         let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
                         let sk_new = format!("stage#bronze_cleaned#{}", now);
 
-                        let put = client
-+                            .put_item()
-+                            .table_name(&table)
-+                            .item("pk", AttributeValue::S(pk.clone()))
-+                            .item("sk", AttributeValue::S(sk_new.clone()))
-+                            .item("payload_cleaned", AttributeValue::S(cleaned.clone()))
-+                            .item("when", AttributeValue::N(now.to_string()));
-+
-+                        match put.send().await {
-+                            Ok(_) => println!("Cleaned bronze -> {} {}", pk, sk_new),
-+                            Err(e) => eprintln!("Failed write for {}: {}", pk, e),
-+                        }
-+                    }
-+                    Err(e) => {
-+                        eprintln!("Invalid JSON for {}: {}", pk, e);
-+                    }
-+                }
-+            } else {
-+                eprintln!("No payload for {}", pk);
-+            }
-+        }
-+    } else {
-+        println!("No bronze items found");
-+    }
-+
-+    Ok(())
- }
+                        client
+                            .put_item()
+                            .table_name(&table)
+                            .item("pk", AttributeValue::S(pk.clone()))
+                            .item("sk", AttributeValue::S(sk_new.clone()))
+                            .item("payload_cleaned", AttributeValue::S(cleaned.clone()))
+                            .item("when", AttributeValue::N(now.to_string()))
+                            .send()
+                            .await?;
+
+                        println!("Cleaned bronze -> {} {}", pk, sk_new);
+                    }
+                    Err(e) => {
+                        eprintln!("Invalid JSON for {}: {}", pk, e);
+                    }
+                }
+            } else {
+                eprintln!("No payload for {}", pk);
+            }
+        }
+    }
+
+    Ok(())
+}
