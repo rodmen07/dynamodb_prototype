@@ -85,5 +85,3 @@ sam deploy --template-file template.yaml --stack-name dynamodb-prototype-stack -
 ## Contacts and Ownership
 - Owner: [Your team / owner name]
 - On-call / Pager duty: [TBD]
-
-

@@ -50,7 +50,7 @@ jobs:
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
 
       - name: Deploy via AWS SAM (optional)
-        if: env.IMAGE_URI != '' && env.IMAGE_URI != ' ' 
+        if: env.IMAGE_URI != '' && env.IMAGE_URI != ' '
         run: |
           pip install --upgrade aws-sam-cli || true
           sam validate || true
