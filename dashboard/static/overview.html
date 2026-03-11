@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CRM Overview</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    h2{margin:20px 0 10px;font-size:1rem;text-transform:uppercase;letter-spacing:.06em;color:#555}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:140px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-value.accounts{color:#2563eb}
+    .stat-value.contacts{color:#7c3aed}
+    .stat-value.activities{color:#0891b2}
+    .stat-value.opportunities{color:#16a34a}
+    .stat-value.pipeline{color:#b8860b}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:16px;margin-bottom:24px}
+    .card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden}
+    .card-header{padding:12px 16px;font-weight:600;font-size:.9rem;border-bottom:1px solid #eee;display:flex;align-items:center;gap:8px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.accounts{background:#2563eb}
+    .dot.contacts{background:#7c3aed}
+    .dot.activities{background:#0891b2}
+    .dot.opportunities{background:#16a34a}
+    table{border-collapse:collapse;width:100%}
+    th{background:#f8f9fb;padding:8px 12px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#777;border-bottom:1px solid #eee}
+    td{border-top:1px solid #f0f0f0;padding:8px 12px;font-size:.85rem;vertical-align:top}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:16px}
+    .badge{display:inline-block;padding:2px 7px;border-radius:9999px;font-size:.75rem;font-weight:600}
+    .badge-blue{background:#dbeafe;color:#1d4ed8}
+    .badge-purple{background:#ede9fe;color:#6d28d9}
+    .badge-green{background:#dcfce7;color:#15803d}
+    .badge-gray{background:#f3f4f6;color:#374151}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/overview" class="active">Overview</a>
+    <a href="/">Gold</a>
+    <a href="/silver">Silver</a>
+    <a href="/bronze">Bronze</a>
+  </nav>
+  <h1>CRM &amp; Pipeline Overview</h1>
+  <p class="sub">Live view of microservice CRM data and DynamoDB medallion pipeline.</p>
+
+  <div id="global-status" class="status loading">Loading overview…</div>
+
+  <h2>CRM Totals</h2>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Accounts</div><div class="stat-value accounts" id="cnt-accounts">—</div></div>
+    <div class="stat"><div class="stat-label">Contacts</div><div class="stat-value contacts" id="cnt-contacts">—</div></div>
+    <div class="stat"><div class="stat-label">Activities</div><div class="stat-value activities" id="cnt-activities">—</div></div>
+    <div class="stat"><div class="stat-label">Opportunities</div><div class="stat-value opportunities" id="cnt-opportunities">—</div></div>
+  </div>
+
+  <h2>Pipeline (DynamoDB)</h2>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Bronze</div><div class="stat-value pipeline" id="cnt-bronze">—</div></div>
+    <div class="stat"><div class="stat-label">Cleaned</div><div class="stat-value" id="cnt-cleaned">—</div></div>
+    <div class="stat"><div class="stat-label">Silver</div><div class="stat-value" id="cnt-silver">—</div></div>
+    <div class="stat"><div class="stat-label">Gold</div><div class="stat-value" id="cnt-gold">—</div></div>
+  </div>
+
+  <div class="refresh" id="refresh-note"></div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-header"><span class="dot accounts"></span>Recent Accounts</div>
+      <table><thead><tr><th>Name</th><th>Domain</th><th>Status</th></tr></thead>
+      <tbody id="tbl-accounts"><tr><td colspan="3" style="color:#888;font-style:italic">Loading…</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot contacts"></span>Recent Contacts</div>
+      <table><thead><tr><th>Name</th><th>Email</th><th>Stage</th></tr></thead>
+      <tbody id="tbl-contacts"><tr><td colspan="3" style="color:#888;font-style:italic">Loading…</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot activities"></span>Recent Activities</div>
+      <table><thead><tr><th>Type</th><th>Subject</th><th>Done</th></tr></thead>
+      <tbody id="tbl-activities"><tr><td colspan="3" style="color:#888;font-style:italic">Loading…</td></tr></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="dot opportunities"></span>Recent Opportunities</div>
+      <table><thead><tr><th>Name</th><th>Stage</th><th>Amount</th></tr></thead>
+      <tbody id="tbl-opportunities"><tr><td colspan="3" style="color:#888;font-style:italic">Loading…</td></tr></tbody></table>
+    </div>
+  </div>
+
+  <script>
+    function text(v) {
+      return String(v == null ? '—' : v);
+    }
+    function badge(val, cls) {
+      const span = document.createElement('span');
+      span.className = 'badge ' + cls;
+      span.textContent = val || '—';
+      return span;
+    }
+    function fillTable(tbodyId, rows, buildRow) {
+      const tbody = document.getElementById(tbodyId);
+      tbody.innerHTML = '';
+      if (!rows || !rows.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.style.color = '#888';
+        td.style.fontStyle = 'italic';
+        td.textContent = 'No records';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      rows.slice(0, 8).forEach(item => tbody.appendChild(buildRow(item)));
+    }
+
+    async function loadAll() {
+      const gs = document.getElementById('global-status');
+      gs.className = 'status loading';
+      gs.textContent = 'Loading overview…';
+      gs.style.display = '';
+
+      const [overview, stats] = await Promise.all([
+        fetch('/api/overview').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+
+      // Pipeline counts
+      if (stats && stats.counts) {
+        document.getElementById('cnt-bronze').textContent = stats.counts.bronze || 0;
+        document.getElementById('cnt-cleaned').textContent = stats.counts.bronze_cleaned || 0;
+        document.getElementById('cnt-silver').textContent = stats.counts.silver || 0;
+        document.getElementById('cnt-gold').textContent = stats.counts.gold || 0;
+      }
+
+      if (!overview) {
+        gs.className = 'status error';
+        gs.textContent = 'Could not load CRM data. Check that ACCOUNTS_SERVICE_URL, CONTACTS_SERVICE_URL, ACTIVITIES_SERVICE_URL, and OPPORTUNITIES_SERVICE_URL are configured.';
+        return;
+      }
+
+      // Accounts
+      const accounts = overview.accounts && overview.accounts.data ? overview.accounts.data : (Array.isArray(overview.accounts) ? overview.accounts : []);
+      document.getElementById('cnt-accounts').textContent = overview.accounts && overview.accounts.total != null ? overview.accounts.total : accounts.length;
+      fillTable('tbl-accounts', accounts, item => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td'); tdName.textContent = text(item.name);
+        const tdDomain = document.createElement('td'); tdDomain.textContent = text(item.domain);
+        const tdStatus = document.createElement('td');
+        tdStatus.appendChild(badge(item.status, item.status === 'active' ? 'badge-green' : 'badge-gray'));
+        tr.appendChild(tdName); tr.appendChild(tdDomain); tr.appendChild(tdStatus);
+        return tr;
+      });
+
+      // Contacts
+      const contacts = overview.contacts && overview.contacts.data ? overview.contacts.data : (Array.isArray(overview.contacts) ? overview.contacts : []);
+      document.getElementById('cnt-contacts').textContent = overview.contacts && overview.contacts.total != null ? overview.contacts.total : contacts.length;
+      fillTable('tbl-contacts', contacts, item => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td'); tdName.textContent = text((item.first_name || '') + ' ' + (item.last_name || ''));
+        const tdEmail = document.createElement('td'); tdEmail.textContent = text(item.email);
+        const tdStage = document.createElement('td');
+        tdStage.appendChild(badge(item.lifecycle_stage, 'badge-purple'));
+        tr.appendChild(tdName); tr.appendChild(tdEmail); tr.appendChild(tdStage);
+        return tr;
+      });
+
+      // Activities
+      const activities = Array.isArray(overview.activities) ? overview.activities : (overview.activities && overview.activities.data ? overview.activities.data : []);
+      document.getElementById('cnt-activities').textContent = activities.length;
+      fillTable('tbl-activities', activities, item => {
+        const tr = document.createElement('tr');
+        const tdType = document.createElement('td');
+        tdType.appendChild(badge(item.activity_type, 'badge-blue'));
+        const tdSubject = document.createElement('td'); tdSubject.textContent = text(item.subject);
+        const tdDone = document.createElement('td'); tdDone.textContent = item.completed ? '✓' : '○';
+        tr.appendChild(tdType); tr.appendChild(tdSubject); tr.appendChild(tdDone);
+        return tr;
+      });
+
+      // Opportunities
+      const opps = Array.isArray(overview.opportunities) ? overview.opportunities : (overview.opportunities && overview.opportunities.data ? overview.opportunities.data : []);
+      document.getElementById('cnt-opportunities').textContent = opps.length;
+      fillTable('tbl-opportunities', opps, item => {
+        const tr = document.createElement('tr');
+        const tdName = document.createElement('td'); tdName.textContent = text(item.name);
+        const tdStage = document.createElement('td');
+        tdStage.appendChild(badge(item.stage, 'badge-green'));
+        const tdAmt = document.createElement('td');
+        tdAmt.textContent = item.amount != null ? '$' + Number(item.amount).toLocaleString() : '—';
+        tr.appendChild(tdName); tr.appendChild(tdStage); tr.appendChild(tdAmt);
+        return tr;
+      });
+
+      gs.style.display = 'none';
+      document.getElementById('refresh-note').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    }
+
+    loadAll();
+    setInterval(loadAll, 30000);
+  </script>
+</body>
+</html>
