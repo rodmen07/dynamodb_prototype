@@ -1,62 +1,112 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Silver Metrics</title>
+  <title>Silver Events</title>
   <style>
-    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:24px}
-    table{border-collapse:collapse;width:100%}
-    th,td{border:1px solid #ddd;padding:8px}
-    th{background:#f4f4f7}
-    pre{white-space:pre-wrap}
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:130px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-value.silver{color:#475569}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .status.empty{background:#f0fdf4;color:#166534}
+    table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    th{background:#f4f4f7;padding:10px 12px;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#555}
+    td{border-top:1px solid #eee;padding:10px 12px;vertical-align:top;font-size:.875rem}
+    td:last-child{max-width:420px}
+    pre{white-space:pre-wrap;word-break:break-all;margin:0;font-size:.8rem;background:#f8f9fb;padding:6px;border-radius:4px}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:8px}
   </style>
 </head>
 <body>
+  <nav>
+    <a href="/overview">Overview</a>
+    <a href="/">Gold</a>
+    <a href="/silver" class="active">Silver</a>
+    <a href="/bronze">Bronze</a>
+  </nav>
   <h1>Silver Events</h1>
-  <p>Enriched/cleaned events (Silver stage).</p>
-  <div id="summary" style="margin-bottom:12px">Loading summary…</div>
-  <table id="metrics">
+  <p class="sub">Enriched and cleaned events — <code>stage#silver</code> records from DynamoDB.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Silver</div><div class="stat-value silver" id="cnt-silver">—</div></div>
+    <div class="stat"><div class="stat-label">Gold</div><div class="stat-value" id="cnt-gold">—</div></div>
+  </div>
+  <div class="refresh" id="refresh-note"></div>
+  <div id="status-msg" class="status loading">Loading records…</div>
+  <table id="metrics" style="display:none">
     <thead><tr><th>When</th><th>Type</th><th>Payload</th></tr></thead>
     <tbody></tbody>
   </table>
   <script>
     async function load() {
+      const statusEl = document.getElementById('status-msg');
+      const table = document.getElementById('metrics');
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading records…';
+      statusEl.style.display = '';
+      table.style.display = 'none';
       try {
         const res = await fetch('/api/silver');
-        if (!res.ok) throw new Error('fetch failed');
+        if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
         const data = await res.json();
-        const tbody = document.querySelector('#metrics tbody');
+        const tbody = table.querySelector('tbody');
         tbody.innerHTML = '';
+        if (!data.length) {
+          statusEl.className = 'status empty';
+          statusEl.textContent = 'No silver records found.';
+          return;
+        }
         data.forEach(item => {
           const tr = document.createElement('tr');
-          const when = item.when || '';
-          const typ = item.event_type || item.type || '';
-          const payload = document.createElement('pre');
-          payload.textContent = JSON.stringify(item, null, 2);
-          tr.innerHTML = `<td>${when}</td><td>${typ}</td>`;
-          const td = document.createElement('td');
-          td.appendChild(payload);
-          tr.appendChild(td);
+          const tdWhen = document.createElement('td');
+          tdWhen.textContent = item.when || '—';
+          const tdType = document.createElement('td');
+          tdType.textContent = item.event_type || item.type || '—';
+          const tdPayload = document.createElement('td');
+          const pre = document.createElement('pre');
+          pre.textContent = JSON.stringify(item, null, 2);
+          tdPayload.appendChild(pre);
+          tr.appendChild(tdWhen);
+          tr.appendChild(tdType);
+          tr.appendChild(tdPayload);
           tbody.appendChild(tr);
         });
-          }
-          catch(e){
-        document.body.appendChild(document.createElement('pre')).textContent = String(e);
+        statusEl.style.display = 'none';
+        table.style.display = '';
+      } catch(e) {
+        statusEl.className = 'status error';
+        statusEl.textContent = `Error loading records: ${e.message}`;
       }
     }
-        async function loadAll(){
-          await load();
-          try{
-            const s = await fetch('/api/stats');
-            const js = await s.json();
-            const div = document.getElementById('summary');
-            if(js.counts){
-              div.textContent = 'Silver: ' + (js.counts.silver || 0) + ', Gold: ' + (js.counts.gold || 0);
-            }
-          }catch(e){ console.warn(e); }
+    async function loadStats() {
+      try {
+        const s = await fetch('/api/stats');
+        if (!s.ok) return;
+        const js = await s.json();
+        if (js.counts) {
+          document.getElementById('cnt-silver').textContent = js.counts.silver || 0;
+          document.getElementById('cnt-gold').textContent = js.counts.gold || 0;
         }
-        loadAll();
+      } catch(e) { console.warn('Stats fetch failed', e); }
+    }
+    async function loadAll() {
+      await Promise.all([load(), loadStats()]);
+      document.getElementById('refresh-note').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    }
+    loadAll();
+    setInterval(loadAll, 30000);
   </script>
 </body>
 </html>

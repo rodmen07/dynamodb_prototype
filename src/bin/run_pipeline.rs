@@ -2,7 +2,7 @@ use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use reqwest::Client as HttpClient;
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
 use dynamodb_prototype::processing::{remove_nulls, apply_defaults, normalize_amount};
 use std::collections::HashMap;
 use std::fs;
@@ -234,7 +234,10 @@ async fn promote_gold_and_sink(client: &Client, http: &HttpClient, table: &str) 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let client = Client::new(&config);
     let http = HttpClient::builder().build()?;
 

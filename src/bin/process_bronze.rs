@@ -1,6 +1,6 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use dynamodb_prototype::processing::{remove_nulls, apply_defaults};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -11,7 +11,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 async fn main() -> Result<(), anyhow::Error> {
     // scanning bronze items, cleaning, and writing cleaned bronze items
     let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let client = Client::new(&config);
 
     let table = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
@@ -37,7 +40,7 @@ async fn main() -> Result<(), anyhow::Error> {
             let pk = it.get("pk").and_then(|v| v.as_s().ok().map(|s| s.to_string())).unwrap_or_else(|| "unknown".to_string());
             let payload = it.get("payload").and_then(|v| v.as_s().ok().map(|s| s.to_string()));
 
-            if let Some(mut s) = payload {
+            if let Some(s) = payload {
                 match serde_json::from_str::<Value>(&s) {
                     Ok(mut json) => {
                         remove_nulls(&mut json);

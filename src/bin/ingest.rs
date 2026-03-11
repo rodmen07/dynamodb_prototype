@@ -9,7 +9,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let client = Client::new(&config);
 
     let table = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
