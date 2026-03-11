@@ -107,7 +107,10 @@ async fn silver_html() -> Html<&'static str> {
 #[tokio::main]
 async fn main() {
     let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
-    let config = aws_config::from_env().region(region_provider).load().await;
+    let config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(region_provider)
+        .load()
+        .await;
     let client = Client::new(&config);
 
     let app = Router::new()
@@ -143,7 +146,12 @@ async fn main() {
             }
         }));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    // Cloud runtimes (e.g., Cloud Run) provide the listen port via PORT.
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Dashboard running at http://{addr}");
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
