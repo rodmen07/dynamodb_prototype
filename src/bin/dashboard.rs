@@ -43,7 +43,7 @@ struct GhRunsResponse {
     workflow_runs: Vec<GhRun>,
 }
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 struct BuildStatus {
     repo: String,
     display_status: String, // "green" | "yellow" | "red" | "unknown"
@@ -631,9 +631,9 @@ async fn handler_spend(
         for group in result.groups() {
             let service = group.keys().first().cloned().unwrap_or_default();
             let metrics = group.metrics();
-            if let Some(cost) = metrics.get("UnblendedCost") {
-                let amount_str = cost.amount().unwrap_or("0");
-                let unit = cost.unit().unwrap_or("USD");
+            if let Some(cost) = metrics.as_ref().and_then(|m| m.get("UnblendedCost")) {
+                let amount_str: &str = cost.amount().unwrap_or("0");
+                let unit: &str = cost.unit().unwrap_or("USD");
                 if let Ok(amount) = amount_str.parse::<f64>() {
                     if amount > 0.0 {
                         total += amount;
