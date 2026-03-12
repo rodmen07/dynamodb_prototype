@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, net::SocketAddr};
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 
 // ---------------------------------------------------------------------------
 // State
@@ -56,15 +57,46 @@ struct BuildStatus {
 // Admin auth helper
 // ---------------------------------------------------------------------------
 
+#[derive(serde::Deserialize)]
+struct DashClaims {
+    roles: Vec<String>,
+}
+
 fn require_admin(headers: &HeaderMap) -> Result<(), StatusCode> {
-    let key = std::env::var("DASHBOARD_ADMIN_KEY").unwrap_or_default();
-    if key.is_empty() {
-        return Ok(()); // no key configured → open in dev mode
+    let admin_key = std::env::var("DASHBOARD_ADMIN_KEY").unwrap_or_default();
+
+    // Dev mode: no key configured → open
+    if admin_key.is_empty() {
+        return Ok(());
     }
-    match headers.get("X-Admin-Key").and_then(|v| v.to_str().ok()) {
-        Some(k) if k == key => Ok(()),
-        _ => Err(StatusCode::UNAUTHORIZED),
+
+    // Option 1: X-Admin-Key header (legacy / direct curl access)
+    if let Some(k) = headers.get("X-Admin-Key").and_then(|v| v.to_str().ok()) {
+        if k == admin_key {
+            return Ok(());
+        }
     }
+
+    // Option 2: Authorization: Bearer <jwt> issued by auth-service
+    let jwt_secret = std::env::var("AUTH_JWT_SECRET").unwrap_or_default();
+    if !jwt_secret.is_empty() {
+        if let Some(bearer) = headers
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+        {
+            let key = DecodingKey::from_secret(jwt_secret.as_bytes());
+            let mut validation = Validation::new(Algorithm::HS256);
+            validation.validate_exp = true;
+            if let Ok(data) = decode::<DashClaims>(bearer, &key, &validation) {
+                if data.claims.roles.iter().any(|r| r == "admin") {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
 }
 
 // ---------------------------------------------------------------------------
