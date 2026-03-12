@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AWS Spend</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .status.warn{background:#fef9c3;color:#92400e;border:1px solid #fde68a}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:16px}
+    .period-note{font-size:.82rem;color:#666;margin-bottom:16px}
+    .total-row{display:flex;align-items:baseline;gap:10px;margin-bottom:20px}
+    .total-label{font-size:.85rem;color:#555;text-transform:uppercase;letter-spacing:.05em}
+    .total-value{font-size:2rem;font-weight:700;color:#1a1a2e}
+    .total-currency{font-size:.9rem;color:#888}
+    .service-list{background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;max-width:640px;margin-bottom:24px}
+    .service-row{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #f0f0f0}
+    .service-row:last-child{border-bottom:none}
+    .service-name{flex:1;font-size:.88rem}
+    .service-amount{font-size:.9rem;font-weight:600;min-width:70px;text-align:right}
+    .bar-wrap{width:140px;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden}
+    .bar-fill{height:100%;background:#2563eb;border-radius:4px}
+    .admin-prompt{background:#fff3cd;border:1px solid #ffd700;border-radius:8px;padding:16px;max-width:400px;margin-bottom:20px}
+    .admin-prompt p{margin:0 0 10px;font-size:.9rem}
+    .admin-prompt input{width:100%;padding:6px 10px;border:1px solid #ccc;border-radius:6px;font-size:.9rem;margin-bottom:8px}
+    .admin-prompt button{padding:6px 16px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.9rem}
+    .admin-prompt button:hover{background:#2d2d4e}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/overview">Overview</a>
+    <a href="/">Gold</a>
+    <a href="/silver">Silver</a>
+    <a href="/bronze">Bronze</a>
+    <a href="/builds">Builds</a>
+    <a href="/infrastructure">Infrastructure</a>
+    <a href="/spend" class="active">Spend</a>
+  </nav>
+  <h1>AWS Spend</h1>
+  <p class="sub">Monthly cost breakdown by service (last 30 days). Admin access required.</p>
+
+  <div id="auth-prompt" class="admin-prompt" style="display:none">
+    <p>Enter your admin key to view spend data:</p>
+    <input type="password" id="admin-key-input" placeholder="X-Admin-Key value" autocomplete="current-password">
+    <button onclick="submitKey()">Unlock</button>
+  </div>
+
+  <div id="global-status" class="status loading">Loading spend data…</div>
+  <div id="period-note" class="period-note" style="display:none"></div>
+  <div id="total-row" class="total-row" style="display:none">
+    <span class="total-label">Total (30 days)</span>
+    <span class="total-value" id="total-value">—</span>
+    <span class="total-currency" id="total-currency">USD</span>
+  </div>
+  <div id="service-list" class="service-list" style="display:none"></div>
+  <div class="refresh" id="refresh-note"></div>
+
+  <script>
+    const KEY_SESSION = 'dashboard_admin_key';
+    let adminKey = sessionStorage.getItem(KEY_SESSION) || '';
+
+    function submitKey() {
+      const val = document.getElementById('admin-key-input').value.trim();
+      if (!val) return;
+      adminKey = val;
+      sessionStorage.setItem(KEY_SESSION, val);
+      document.getElementById('auth-prompt').style.display = 'none';
+      loadAll();
+    }
+
+    document.getElementById('admin-key-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitKey();
+    });
+
+    async function loadAll() {
+      const gs = document.getElementById('global-status');
+      gs.className = 'status loading';
+      gs.textContent = 'Loading spend data…';
+      gs.style.display = '';
+
+      const headers = {};
+      if (adminKey) headers['X-Admin-Key'] = adminKey;
+
+      let data;
+      try {
+        const r = await fetch('/api/spend', { headers });
+        if (r.status === 401) {
+          gs.style.display = 'none';
+          document.getElementById('auth-prompt').style.display = '';
+          document.getElementById('admin-key-input').focus();
+          return;
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        data = await r.json();
+      } catch (e) {
+        gs.className = 'status error';
+        gs.textContent = 'Could not load spend data: ' + e.message;
+        return;
+      }
+
+      gs.style.display = 'none';
+
+      // Period note
+      const pn = document.getElementById('period-note');
+      pn.textContent = 'Period: ' + data.period.start + ' → ' + data.period.end;
+      pn.style.display = '';
+
+      // Total
+      const tr = document.getElementById('total-row');
+      document.getElementById('total-value').textContent = '$' + Number(data.total).toFixed(2);
+      document.getElementById('total-currency').textContent = data.currency || 'USD';
+      tr.style.display = '';
+
+      // Service list
+      const list = document.getElementById('service-list');
+      list.style.display = '';
+      list.innerHTML = '';
+
+      const services = data.by_service || [];
+      const maxAmount = services.length > 0
+        ? Math.max(...services.map(s => parseFloat(s.amount) || 0))
+        : 1;
+
+      services.forEach(s => {
+        const amount = parseFloat(s.amount) || 0;
+        const pct = maxAmount > 0 ? (amount / maxAmount) * 100 : 0;
+        const row = document.createElement('div');
+        row.className = 'service-row';
+        row.innerHTML = `
+          <span class="service-name">${s.service}</span>
+          <div class="bar-wrap"><div class="bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
+          <span class="service-amount">$${amount.toFixed(4)}</span>
+        `;
+        list.appendChild(row);
+      });
+
+      if (services.length === 0) {
+        const row = document.createElement('div');
+        row.className = 'service-row';
+        row.innerHTML = '<span style="color:#9ca3af;font-style:italic">No billable services in this period.</span>';
+        list.appendChild(row);
+      }
+
+      document.getElementById('refresh-note').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    }
+
+    // On load: if no key in session, show prompt; otherwise try to load
+    if (!adminKey) {
+      document.getElementById('global-status').style.display = 'none';
+      document.getElementById('auth-prompt').style.display = '';
+    } else {
+      loadAll();
+    }
+
+    setInterval(loadAll, 300000); // 5-minute refresh
+  </script>
+</body>
+</html>

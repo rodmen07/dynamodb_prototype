@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Infrastructure Metrics</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    h2{margin:24px 0 10px;font-size:1rem;text-transform:uppercase;letter-spacing:.06em;color:#555}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:16px}
+    /* Lambda cards */
+    .lambda-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:24px}
+    .lambda-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 18px}
+    .lambda-name{font-weight:600;font-size:.9rem;margin-bottom:12px;color:#1a1a2e;border-bottom:1px solid #f0f0f0;padding-bottom:8px}
+    .metric-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0}
+    .metric-label{font-size:.78rem;color:#666}
+    .metric-value{font-size:.88rem;font-weight:600;display:flex;align-items:center;gap:5px}
+    .trend-up{color:#d97706}
+    .trend-down{color:#2563eb}
+    .trend-stable{color:#9ca3af}
+    /* DynamoDB stats */
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:160px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-trend{font-size:.75rem;margin-top:2px}
+    /* Pipeline counts */
+    .stat-value.pipeline{color:#b8860b}
+    .no-data{color:#9ca3af;font-size:.85rem;font-style:italic}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/overview">Overview</a>
+    <a href="/">Gold</a>
+    <a href="/silver">Silver</a>
+    <a href="/bronze">Bronze</a>
+    <a href="/builds">Builds</a>
+    <a href="/infrastructure" class="active">Infrastructure</a>
+    <a href="/spend">Spend</a>
+  </nav>
+  <h1>Infrastructure Metrics</h1>
+  <p class="sub">CloudWatch metrics for Lambda and DynamoDB over the last 24 hours. Refreshes every 60 seconds.</p>
+
+  <div id="global-status" class="status loading">Loading metrics…</div>
+
+  <h2>Lambda Functions</h2>
+  <div class="lambda-grid" id="lambda-grid"></div>
+
+  <h2>DynamoDB</h2>
+  <div class="stats" id="ddb-stats"></div>
+
+  <h2>Pipeline (record counts)</h2>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Bronze</div><div class="stat-value pipeline" id="cnt-bronze">—</div></div>
+    <div class="stat"><div class="stat-label">Cleaned</div><div class="stat-value" id="cnt-cleaned">—</div></div>
+    <div class="stat"><div class="stat-label">Silver</div><div class="stat-value" id="cnt-silver">—</div></div>
+    <div class="stat"><div class="stat-label">Gold</div><div class="stat-value" id="cnt-gold">—</div></div>
+  </div>
+
+  <div class="refresh" id="refresh-note"></div>
+
+  <script>
+    function trendArrow(trend) {
+      if (trend === 'up')   return { arrow: '▲', cls: 'trend-up' };
+      if (trend === 'down') return { arrow: '▼', cls: 'trend-down' };
+      return { arrow: '→', cls: 'trend-stable' };
+    }
+
+    function lastVal(series) {
+      if (!series || !series.values || series.values.length === 0) return null;
+      return series.values[series.values.length - 1];
+    }
+
+    function fmt(val, decimals) {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(decimals != null ? decimals : 0);
+    }
+
+    async function loadAll() {
+      const gs = document.getElementById('global-status');
+
+      const [infra, stats] = await Promise.all([
+        fetch('/api/infrastructure').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
+      ]);
+
+      // Pipeline counts
+      if (stats && stats.counts) {
+        document.getElementById('cnt-bronze').textContent = stats.counts.bronze || 0;
+        document.getElementById('cnt-cleaned').textContent = stats.counts.bronze_cleaned || 0;
+        document.getElementById('cnt-silver').textContent = stats.counts.silver || 0;
+        document.getElementById('cnt-gold').textContent = stats.counts.gold || 0;
+      }
+
+      if (!infra) {
+        gs.className = 'status error';
+        gs.textContent = 'Could not load CloudWatch metrics. Ensure AWS credentials and cloudwatch:GetMetricData permission are configured.';
+        return;
+      }
+
+      gs.style.display = 'none';
+
+      // Lambda cards
+      const lambdaGrid = document.getElementById('lambda-grid');
+      lambdaGrid.innerHTML = '';
+      (infra.lambda || []).forEach(fn => {
+        const inv  = trendArrow(fn.invocations && fn.invocations.trend);
+        const err  = trendArrow(fn.errors && fn.errors.trend);
+        const dur  = trendArrow(fn.duration_ms && fn.duration_ms.trend);
+        const card = document.createElement('div');
+        card.className = 'lambda-card';
+        card.innerHTML = `
+          <div class="lambda-name">${fn.name}</div>
+          <div class="metric-row">
+            <span class="metric-label">Invocations (24h)</span>
+            <span class="metric-value">${fmt(lastVal(fn.invocations))} <span class="${inv.cls}">${inv.arrow}</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Errors (24h)</span>
+            <span class="metric-value">${fmt(lastVal(fn.errors))} <span class="${err.cls}">${err.arrow}</span></span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Duration avg (ms)</span>
+            <span class="metric-value">${fmt(lastVal(fn.duration_ms), 1)} <span class="${dur.cls}">${dur.arrow}</span></span>
+          </div>
+        `;
+        lambdaGrid.appendChild(card);
+      });
+
+      // DynamoDB stats
+      const ddbStats = document.getElementById('ddb-stats');
+      ddbStats.innerHTML = '';
+      const ddb = infra.dynamodb || {};
+
+      const addStat = (label, series, decimals) => {
+        const val = lastVal(series);
+        const { arrow, cls } = trendArrow(series && series.trend);
+        const div = document.createElement('div');
+        div.className = 'stat';
+        div.innerHTML = `
+          <div class="stat-label">${label}</div>
+          <div class="stat-value">${fmt(val, decimals)}</div>
+          <div class="stat-trend ${cls}">${arrow} ${series && series.trend || 'stable'}</div>
+        `;
+        ddbStats.appendChild(div);
+      };
+
+      addStat('Read Capacity', ddb.read_capacity, 2);
+      addStat('Write Capacity', ddb.write_capacity, 2);
+      addStat('Latency avg (ms)', ddb.latency_ms, 1);
+
+      document.getElementById('refresh-note').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString() +
+        (infra.fetched_at ? ' · Data fetched: ' + new Date(infra.fetched_at).toLocaleTimeString() : '');
+    }
+
+    loadAll();
+    setInterval(loadAll, 60000);
+  </script>
+</body>
+</html>
