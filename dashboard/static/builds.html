@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CI/CD Build Status</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:16px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px}
+    .build-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s}
+    .build-card:hover{box-shadow:0 2px 10px rgba(0,0,0,.08)}
+    .build-header{display:flex;align-items:center;gap:10px}
+    .dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+    .dot-green{background:#16a34a}
+    .dot-yellow{background:#d97706}
+    .dot-red{background:#dc2626}
+    .dot-unknown{background:#9ca3af}
+    .repo-name{font-weight:600;font-size:.95rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .build-meta{font-size:.78rem;color:#666;display:flex;justify-content:space-between;align-items:center}
+    .view-link{font-size:.78rem;color:#2563eb;text-decoration:none;padding:3px 8px;border:1px solid #bfdbfe;border-radius:5px;white-space:nowrap}
+    .view-link:hover{background:#dbeafe}
+    .status-label{font-size:.75rem;font-weight:600;padding:2px 8px;border-radius:9999px}
+    .label-green{background:#dcfce7;color:#15803d}
+    .label-yellow{background:#fef3c7;color:#92400e}
+    .label-red{background:#fee2e2;color:#991b1b}
+    .label-unknown{background:#f3f4f6;color:#4b5563}
+    .cached-badge{font-size:.7rem;color:#9ca3af;margin-left:4px}
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/overview">Overview</a>
+    <a href="/">Gold</a>
+    <a href="/silver">Silver</a>
+    <a href="/bronze">Bronze</a>
+    <a href="/builds" class="active">Builds</a>
+    <a href="/infrastructure">Infrastructure</a>
+    <a href="/spend">Spend</a>
+  </nav>
+  <h1>CI/CD Build Status</h1>
+  <p class="sub">Latest GitHub Actions run per repository. Refreshes every 60 seconds.</p>
+
+  <div id="global-status" class="status loading">Loading build status…</div>
+  <div class="grid" id="build-grid"></div>
+  <div class="refresh" id="refresh-note"></div>
+
+  <script>
+    function relativeTime(iso) {
+      if (!iso) return '';
+      const diff = Date.now() - new Date(iso).getTime();
+      const s = Math.floor(diff / 1000);
+      if (s < 60) return s + 's ago';
+      const m = Math.floor(s / 60);
+      if (m < 60) return m + 'm ago';
+      const h = Math.floor(m / 60);
+      if (h < 24) return h + 'h ago';
+      return Math.floor(h / 24) + 'd ago';
+    }
+
+    const STATUS_DOT   = { green:'dot-green', yellow:'dot-yellow', red:'dot-red', unknown:'dot-unknown' };
+    const STATUS_LABEL = { green:'label-green', yellow:'label-yellow', red:'label-red', unknown:'label-unknown' };
+    const STATUS_TEXT  = { green:'Passing', yellow:'Running', red:'Failed', unknown:'Unknown' };
+
+    async function loadAll() {
+      const gs = document.getElementById('global-status');
+      let builds;
+      try {
+        const r = await fetch('/api/builds');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        builds = await r.json();
+      } catch (e) {
+        gs.className = 'status error';
+        gs.textContent = 'Could not load build status: ' + e.message;
+        return;
+      }
+
+      gs.style.display = 'none';
+      const grid = document.getElementById('build-grid');
+      grid.innerHTML = '';
+
+      builds.forEach(b => {
+        const ds = b.display_status || 'unknown';
+        const card = document.createElement('div');
+        card.className = 'build-card';
+
+        card.innerHTML = `
+          <div class="build-header">
+            <span class="dot ${STATUS_DOT[ds] || 'dot-unknown'}"></span>
+            <span class="repo-name" title="${b.repo}">${b.repo}</span>
+            <span class="status-label ${STATUS_LABEL[ds] || 'label-unknown'}">${STATUS_TEXT[ds] || ds}</span>
+            ${b.cached ? '<span class="cached-badge">(cached)</span>' : ''}
+          </div>
+          <div class="build-meta">
+            <span>${relativeTime(b.run_at)}</span>
+            ${b.html_url ? `<a class="view-link" href="${b.html_url}" target="_blank" rel="noopener">View run →</a>` : ''}
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      document.getElementById('refresh-note').textContent =
+        'Last updated: ' + new Date().toLocaleTimeString();
+    }
+
+    loadAll();
+    setInterval(loadAll, 60000);
+  </script>
+</body>
+</html>
