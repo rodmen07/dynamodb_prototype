@@ -729,6 +729,13 @@ async fn spend_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/spend.html"))
 }
 
+async fn auth_js() -> impl axum::response::IntoResponse {
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/javascript")],
+        include_str!("../../dashboard/static/auth.js"),
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -786,6 +793,7 @@ async fn main() {
         .route("/builds", get(builds_html))
         .route("/infrastructure", get(infrastructure_html))
         .route("/spend", get(spend_html))
+        .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
         .route("/api/bronze", get(handler_bronze))

@@ -30,15 +30,9 @@
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/overview">Overview</a>
-    <a href="/">Gold</a>
-    <a href="/silver">Silver</a>
-    <a href="/bronze" class="active">Bronze</a>
-    <a href="/builds">Builds</a>
-    <a href="/infrastructure">Infrastructure</a>
-    <a href="/spend">Spend</a>
-  </nav>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('bronze');</script>
   <h1>Bronze Records</h1>
   <p class="sub">Raw ingested events — <code>stage#bronze</code> records from DynamoDB.</p>
   <div class="stats">

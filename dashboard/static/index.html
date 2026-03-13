@@ -30,15 +30,9 @@
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/overview">Overview</a>
-    <a href="/" class="active">Gold</a>
-    <a href="/silver">Silver</a>
-    <a href="/bronze">Bronze</a>
-    <a href="/builds">Builds</a>
-    <a href="/infrastructure">Infrastructure</a>
-    <a href="/spend">Spend</a>
-  </nav>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('gold');</script>
   <h1>Gold Metrics</h1>
   <p class="sub">Aggregated medallion pipeline output — <code>stage#gold</code> records from DynamoDB.</p>
   <div class="stats" id="stats">

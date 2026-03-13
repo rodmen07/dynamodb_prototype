@@ -38,15 +38,9 @@
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/overview">Overview</a>
-    <a href="/">Gold</a>
-    <a href="/silver">Silver</a>
-    <a href="/bronze">Bronze</a>
-    <a href="/builds" class="active">Builds</a>
-    <a href="/infrastructure">Infrastructure</a>
-    <a href="/spend">Spend</a>
-  </nav>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('builds');</script>
   <h1>CI/CD Build Status</h1>
   <p class="sub">Latest GitHub Actions run per repository. Refreshes every 60 seconds.</p>
 
