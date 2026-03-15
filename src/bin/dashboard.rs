@@ -259,6 +259,82 @@ async fn handler_ingest(
     Ok(StatusCode::ACCEPTED)
 }
 
+#[derive(Deserialize)]
+struct PromoteBody {
+    pk: String,
+    sk: String,
+}
+
+async fn handler_promote(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Json(body): Json<PromoteBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+
+    // Determine next stage from the current SK prefix
+    let next_stage = if body.sk.starts_with("stage#bronze#") {
+        "silver"
+    } else if body.sk.starts_with("stage#silver#") {
+        "gold"
+    } else {
+        return Err((StatusCode::BAD_REQUEST, "sk is already at gold or has an unrecognized stage prefix".to_string()));
+    };
+
+    // Extract the UUID suffix (same UUID, new stage)
+    let uuid_part = body.sk.splitn(3, '#').nth(2).ok_or_else(|| {
+        (StatusCode::BAD_REQUEST, "sk format must be stage#<tier>#<uuid>".to_string())
+    })?;
+    let new_sk = format!("stage#{next_stage}#{uuid_part}");
+
+    // Fetch the existing item's payload
+    let get_resp = s.ddb
+        .get_item()
+        .table_name(&table_name)
+        .key("pk", AttributeValue::S(body.pk.clone()))
+        .key("sk", AttributeValue::S(body.sk.clone()))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    let item = get_resp.item.ok_or_else(|| {
+        (StatusCode::NOT_FOUND, format!("item not found: pk={} sk={}", body.pk, body.sk))
+    })?;
+
+    let payload = item.get("payload")
+        .and_then(|v| v.as_s().ok())
+        .cloned()
+        .unwrap_or_default();
+
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+
+    // Write promoted item
+    s.ddb
+        .put_item()
+        .table_name(&table_name)
+        .item("pk", AttributeValue::S(body.pk.clone()))
+        .item("sk", AttributeValue::S(new_sk))
+        .item("payload", AttributeValue::S(payload))
+        .item("ingested_at", AttributeValue::S(now))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    // Delete the old item
+    s.ddb
+        .delete_item()
+        .table_name(&table_name)
+        .key("pk", AttributeValue::S(body.pk))
+        .key("sk", AttributeValue::S(body.sk))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    Ok(StatusCode::ACCEPTED)
+}
+
 async fn handler_overview(
     State(s): State<DashState>,
     headers: HeaderMap,
@@ -821,6 +897,7 @@ async fn main() {
         .route("/api/infrastructure", get(handler_infrastructure))
         .route("/api/spend", get(handler_spend))
         .route("/ingest", post(handler_ingest))
+        .route("/promote", post(handler_promote))
         .with_state(state)
         .layer(cors);
 
