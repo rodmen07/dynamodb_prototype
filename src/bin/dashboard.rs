@@ -505,9 +505,7 @@ async fn get_cached_or_fetch(state: &DashState, repo: &str) -> BuildStatus {
 
 async fn handler_builds(
     State(s): State<DashState>,
-    headers: HeaderMap,
 ) -> Result<Json<Vec<BuildStatus>>, StatusCode> {
-    require_admin(&headers)?;
     const REPOS: &[&str] = &[
         "go-pipeline-monitor",
         "backend-service",
