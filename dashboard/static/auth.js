@@ -65,5 +65,15 @@
     document.body.appendChild(gate);
   }
 
-  window.DashAuth = { getToken: getToken, isAdmin: isAdmin, renderNav: renderNav, guardAdminPage: guardAdminPage };
+  /** fetch() wrapper that injects Authorization: Bearer <token> when a token is present. */
+  function authFetch(url, opts) {
+    var token = getToken();
+    var options = opts || {};
+    if (token) {
+      options.headers = Object.assign({ 'Authorization': 'Bearer ' + token }, options.headers || {});
+    }
+    return fetch(url, options);
+  }
+
+  window.DashAuth = { getToken: getToken, isAdmin: isAdmin, renderNav: renderNav, guardAdminPage: guardAdminPage, authFetch: authFetch };
 }());

@@ -150,33 +150,25 @@ async fn list_stage(
 
 async fn handler_gold(
     State(s): State<DashState>,
-    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#gold").await.map(Json)
 }
 
 async fn handler_silver(
     State(s): State<DashState>,
-    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#silver").await.map(Json)
 }
 
 async fn handler_bronze(
     State(s): State<DashState>,
-    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#bronze").await.map(Json)
 }
 
 async fn handler_stats(
     State(s): State<DashState>,
-    headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
     let resp = s
         .ddb

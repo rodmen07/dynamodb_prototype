@@ -84,8 +84,8 @@
       const gs = document.getElementById('global-status');
 
       const [infra, stats] = await Promise.all([
-        fetch('/api/infrastructure').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
+        DashAuth.authFetch('/api/infrastructure').then(r => r.ok ? r.json() : null).catch(() => null),
+        DashAuth.authFetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       // Pipeline counts

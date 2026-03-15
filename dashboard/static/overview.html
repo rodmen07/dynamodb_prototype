@@ -128,8 +128,8 @@
       gs.style.display = '';
 
       const [overview, stats] = await Promise.all([
-        fetch('/api/overview').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
+        DashAuth.authFetch('/api/overview').then(r => r.ok ? r.json() : null).catch(() => null),
+        DashAuth.authFetch('/api/stats').then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
       // Pipeline counts
