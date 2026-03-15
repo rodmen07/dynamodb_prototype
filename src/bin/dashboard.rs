@@ -63,12 +63,8 @@ struct DashClaims {
 }
 
 fn require_admin(headers: &HeaderMap) -> Result<(), StatusCode> {
-    let admin_key = std::env::var("DASHBOARD_ADMIN_KEY").unwrap_or_default();
-
-    // Dev mode: no key configured → open
-    if admin_key.is_empty() {
-        return Ok(());
-    }
+    let admin_key = std::env::var("DASHBOARD_ADMIN_KEY")
+        .expect("DASHBOARD_ADMIN_KEY must be set");
 
     // Option 1: X-Admin-Key header (legacy / direct curl access)
     if let Some(k) = headers.get("X-Admin-Key").and_then(|v| v.to_str().ok()) {
