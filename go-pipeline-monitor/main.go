@@ -84,10 +84,10 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 
 		counts := PipelineCounts{}
 		stages := map[string]*int{
-			"bronze":  &counts.Bronze,
-			"cleaned": &counts.Cleaned,
-			"silver":  &counts.Silver,
-			"gold":    &counts.Gold,
+			"bronze":         &counts.Bronze,
+			"bronze_cleaned": &counts.Cleaned,
+			"silver":         &counts.Silver,
+			"gold":           &counts.Gold,
 		}
 
 		var wg sync.WaitGroup
