@@ -209,11 +209,38 @@ func handleServices(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func withCORS(next http.HandlerFunc) http.HandlerFunc {
-	allowed := os.Getenv("ALLOWED_ORIGINS")
-	return func(w http.ResponseWriter, r *http.Request) {
-		if allowed != "" {
-			w.Header().Set("Access-Control-Allow-Origin", allowed)
+	allowedRaw := os.Getenv("ALLOWED_ORIGINS")
+
+	// Precompute the list of allowed origins from ALLOWED_ORIGINS.
+	// Supports:
+	//   - "*" (allow all origins)
+	//   - single origin (e.g. "https://example.com")
+	//   - comma-separated list of origins (e.g. "https://a.com,https://b.com")
+	var allowedOrigins []string
+	if allowedRaw != "" && allowedRaw != "*" {
+		for _, part := range strings.Split(allowedRaw, ",") {
+			if origin := strings.TrimSpace(part); origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
 		}
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+
+		if allowedRaw == "*" {
+			// Explicit wildcard: allow any origin.
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if origin != "" && len(allowedOrigins) > 0 {
+			// Echo back the Origin header if it is in the allowlist.
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
+		}
+
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Admin-Key, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		if r.Method == http.MethodOptions {
