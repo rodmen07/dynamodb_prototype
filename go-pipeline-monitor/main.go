@@ -36,7 +36,7 @@ type PipelineCounts struct {
 type ServiceStatus struct {
 	Name      string `json:"name"`
 	URL       string `json:"url"`
-	Status    string `json:"status"` // "ok" | "error" | "timeout"
+	Status    string `json:"status"` // "ok" | "error"
 	LatencyMs int64  `json:"latency_ms"`
 }
 
