@@ -114,19 +114,35 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 // This matches the table schema where SK = stage#bronze#<uuid>, stage#silver#<uuid>, etc.
 func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string) int {
 	prefix := "stage#" + stage + "#"
-	out, err := ddb.Scan(ctx, &dynamodb.ScanInput{
-		TableName:        aws.String(table),
-		FilterExpression: aws.String("begins_with(sk, :prefix)"),
-		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":prefix": &types.AttributeValueMemberS{Value: prefix},
-		},
-		Select: types.SelectCount,
-	})
-	if err != nil {
-		log.Printf("countByStage %s: %v", stage, err)
-		return 0
+
+	var total int32
+	var lastEvaluatedKey map[string]types.AttributeValue
+
+	for {
+		out, err := ddb.Scan(ctx, &dynamodb.ScanInput{
+			TableName:        aws.String(table),
+			FilterExpression: aws.String("begins_with(sk, :prefix)"),
+			ExpressionAttributeValues: map[string]types.AttributeValue{
+				":prefix": &types.AttributeValueMemberS{Value: prefix},
+			},
+			Select:           types.SelectCount,
+			ExclusiveStartKey: lastEvaluatedKey,
+		})
+		if err != nil {
+			log.Printf("countByStage %s: %v", stage, err)
+			return 0
+		}
+
+		total += out.Count
+
+		if out.LastEvaluatedKey == nil || len(out.LastEvaluatedKey) == 0 {
+			break
+		}
+
+		lastEvaluatedKey = out.LastEvaluatedKey
 	}
-	return int(out.Count)
+
+	return int(total)
 }
 
 func handleServices(w http.ResponseWriter, r *http.Request) {
