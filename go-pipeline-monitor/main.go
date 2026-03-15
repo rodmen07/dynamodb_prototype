@@ -97,18 +97,36 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 
 		var wg sync.WaitGroup
 		var mu sync.Mutex
+		var firstErr error
 
 		for stage, counter := range stages {
 			wg.Add(1)
 			go func(stage string, counter *int) {
 				defer wg.Done()
-				n := countByStage(r.Context(), ddb, table, stage)
+				n, err := countByStage(r.Context(), ddb, table, stage)
 				mu.Lock()
+				defer mu.Unlock()
+				if err != nil {
+					log.Printf("pipeline count error: %v", err)
+					if firstErr == nil {
+						firstErr = err
+					}
+					return
+				}
 				*counter = n
-				mu.Unlock()
 			}(stage, counter)
 		}
 		wg.Wait()
+
+		if firstErr != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"code":    "DYNAMO_ERROR",
+				"message": "failed to query pipeline counts",
+			})
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(counts)
@@ -117,7 +135,7 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 
 // countByStage scans the table and counts items whose sk begins with "stage#<tier>#".
 // This matches the table schema where SK = stage#bronze#<uuid>, stage#silver#<uuid>, etc.
-func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string) int {
+func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string) (int, error) {
 	prefix := "stage#" + stage + "#"
 
 	var total int32
@@ -130,24 +148,23 @@ func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string
 			ExpressionAttributeValues: map[string]types.AttributeValue{
 				":prefix": &types.AttributeValueMemberS{Value: prefix},
 			},
-			Select:           types.SelectCount,
+			Select:            types.SelectCount,
 			ExclusiveStartKey: lastEvaluatedKey,
 		})
 		if err != nil {
-			log.Printf("countByStage %s: %v", stage, err)
-			return 0
+			return 0, fmt.Errorf("countByStage %s: %w", stage, err)
 		}
 
 		total += out.Count
 
-		if out.LastEvaluatedKey == nil || len(out.LastEvaluatedKey) == 0 {
+		if len(out.LastEvaluatedKey) == 0 {
 			break
 		}
 
 		lastEvaluatedKey = out.LastEvaluatedKey
 	}
 
-	return int(total)
+	return int(total), nil
 }
 
 func handleServices(w http.ResponseWriter, r *http.Request) {
@@ -158,7 +175,17 @@ func handleServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entries := strings.Split(raw, ",")
+	var entries []string
+	for _, e := range strings.Split(raw, ",") {
+		if t := strings.TrimSpace(e); t != "" {
+			entries = append(entries, t)
+		}
+	}
+	if len(entries) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]ServiceStatus{})
+		return
+	}
 	results := make([]ServiceStatus, len(entries))
 
 	var wg sync.WaitGroup
