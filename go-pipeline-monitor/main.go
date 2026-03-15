@@ -110,17 +110,15 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 	}
 }
 
-// countByStage uses a Query on the stage GSI (stage-index) if available,
-// falling back to a Scan with a FilterExpression.
+// countByStage scans the table and counts items whose sk begins with "stage#<tier>#".
+// This matches the table schema where SK = stage#bronze#<uuid>, stage#silver#<uuid>, etc.
 func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string) int {
+	prefix := "stage#" + stage + "#"
 	out, err := ddb.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(table),
-		FilterExpression: aws.String("#s = :stage"),
-		ExpressionAttributeNames: map[string]string{
-			"#s": "stage",
-		},
+		FilterExpression: aws.String("begins_with(sk, :prefix)"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":stage": &types.AttributeValueMemberS{Value: stage},
+			":prefix": &types.AttributeValueMemberS{Value: prefix},
 		},
 		Select: types.SelectCount,
 	})

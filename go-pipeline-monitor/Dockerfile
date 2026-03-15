@@ -1,11 +1,10 @@
 FROM golang:1.22-bookworm AS builder
 
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
 
+# Copy all source first so go mod tidy can resolve imports, then build
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /go-pipeline-monitor .
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /go-pipeline-monitor .
 
 # ---- runtime ----
 FROM debian:bookworm-slim
