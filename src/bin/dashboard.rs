@@ -433,7 +433,7 @@ async fn handler_builds(
 ) -> Result<Json<Vec<BuildStatus>>, StatusCode> {
     require_admin(&headers)?;
     const REPOS: &[&str] = &[
-        "microservices",
+        "go-pipeline-monitor",
         "backend-service",
         "frontend-service",
         "auth-service",
