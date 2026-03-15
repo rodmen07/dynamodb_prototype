@@ -150,25 +150,33 @@ async fn list_stage(
 
 async fn handler_gold(
     State(s): State<DashState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#gold").await.map(Json)
 }
 
 async fn handler_silver(
     State(s): State<DashState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#silver").await.map(Json)
 }
 
 async fn handler_bronze(
     State(s): State<DashState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     list_stage(&s.ddb, "stage#bronze").await.map(Json)
 }
 
 async fn handler_stats(
     State(s): State<DashState>,
+    headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
     let resp = s
         .ddb
@@ -209,8 +217,10 @@ struct IngestBody {
 
 async fn handler_ingest(
     State(s): State<DashState>,
+    headers: HeaderMap,
     Json(body): Json<IngestBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    require_admin(&headers).map_err(|s| (s, "unauthorized".to_string()))?;
     if !body
         .source
         .chars()
@@ -249,7 +259,11 @@ async fn handler_ingest(
     Ok(StatusCode::ACCEPTED)
 }
 
-async fn handler_overview(State(s): State<DashState>) -> Json<Value> {
+async fn handler_overview(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    require_admin(&headers)?;
     let token = std::env::var("MICROSERVICES_API_TOKEN").unwrap_or_default();
     let auth = format!("Bearer {}", token);
 
@@ -279,12 +293,12 @@ async fn handler_overview(State(s): State<DashState>) -> Json<Value> {
         fetch("OPPORTUNITIES_SERVICE_URL", "/api/v1/opportunities"),
     );
 
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "accounts": accounts,
         "contacts": contacts,
         "activities": activities,
         "opportunities": opportunities,
-    }))
+    })))
 }
 
 // ---------------------------------------------------------------------------
@@ -413,7 +427,11 @@ async fn get_cached_or_fetch(state: &DashState, repo: &str) -> BuildStatus {
     status
 }
 
-async fn handler_builds(State(s): State<DashState>) -> Json<Vec<BuildStatus>> {
+async fn handler_builds(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<BuildStatus>>, StatusCode> {
+    require_admin(&headers)?;
     const REPOS: &[&str] = &[
         "microservices",
         "backend-service",
@@ -432,7 +450,7 @@ async fn handler_builds(State(s): State<DashState>) -> Json<Vec<BuildStatus>> {
         get_cached_or_fetch(&s, REPOS[5]),
     );
 
-    Json(vec![r0, r1, r2, r3, r4, r5])
+    Ok(Json(vec![r0, r1, r2, r3, r4, r5]))
 }
 
 // ---------------------------------------------------------------------------
@@ -489,7 +507,11 @@ fn make_metric_query(
         .build()
 }
 
-async fn handler_infrastructure(State(s): State<DashState>) -> Json<Value> {
+async fn handler_infrastructure(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, StatusCode> {
+    require_admin(&headers)?;
     let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
     let now = chrono::Utc::now();
     let start = now - chrono::Duration::hours(24);
@@ -602,7 +624,7 @@ async fn handler_infrastructure(State(s): State<DashState>) -> Json<Value> {
         })
         .collect();
 
-    Json(serde_json::json!({
+    Ok(Json(serde_json::json!({
         "lambda": lambda_data,
         "dynamodb": {
             "read_capacity": metric_obj("ddb_read"),
@@ -610,7 +632,7 @@ async fn handler_infrastructure(State(s): State<DashState>) -> Json<Value> {
             "latency_ms": metric_obj("ddb_lat"),
         },
         "fetched_at": now.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-    }))
+    })))
 }
 
 // ---------------------------------------------------------------------------
