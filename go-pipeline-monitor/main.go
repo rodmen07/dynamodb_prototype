@@ -84,10 +84,10 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 
 		counts := PipelineCounts{}
 		stages := map[string]*int{
-			"bronze":  &counts.Bronze,
-			"cleaned": &counts.Cleaned,
-			"silver":  &counts.Silver,
-			"gold":    &counts.Gold,
+			"bronze":         &counts.Bronze,
+			"bronze_cleaned": &counts.Cleaned,
+			"silver":         &counts.Silver,
+			"gold":           &counts.Gold,
 		}
 
 		var wg sync.WaitGroup
@@ -110,17 +110,19 @@ func handlePipeline(ddb *dynamodb.Client) http.HandlerFunc {
 	}
 }
 
-// countByStage uses a Query on the stage GSI (stage-index) if available,
-// falling back to a Scan with a FilterExpression.
+// countByStage counts items for a given stage by matching the sk prefix
+// (e.g., sk values like "stage#bronze#...", "stage#bronze_cleaned#...", etc.).
 func countByStage(ctx context.Context, ddb *dynamodb.Client, table, stage string) int {
+	prefix := fmt.Sprintf("stage#%s", stage)
+
 	out, err := ddb.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(table),
-		FilterExpression: aws.String("#s = :stage"),
+		FilterExpression: aws.String("begins_with(#sk, :prefix)"),
 		ExpressionAttributeNames: map[string]string{
-			"#s": "stage",
+			"#sk": "sk",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":stage": &types.AttributeValueMemberS{Value: stage},
+			":prefix": &types.AttributeValueMemberS{Value: prefix},
 		},
 		Select: types.SelectCount,
 	})
