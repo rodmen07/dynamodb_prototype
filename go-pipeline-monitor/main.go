@@ -59,7 +59,12 @@ func requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 		if provided != adminKey {
-			http.Error(w, `{"code":"UNAUTHORIZED","message":"invalid or missing admin key"}`, http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]string{
+				"code":    "UNAUTHORIZED",
+				"message": "invalid or missing admin key",
+			})
 			return
 		}
 		next(w, r)
