@@ -808,8 +808,6 @@ async fn main() {
         .unwrap_or(8080);
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     println!("Dashboard running at http://{addr}");
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 }
