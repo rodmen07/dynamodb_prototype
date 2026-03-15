@@ -16,6 +16,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 chrono = "0.4"
 axum = "0.6"
 uuid = { version = "1", features = ["v4"] }
-tower = "0.4"
+tower = "0.5"
 anyhow = "1.0"
 jsonwebtoken = "9"
