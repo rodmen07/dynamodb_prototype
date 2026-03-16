@@ -820,12 +820,50 @@ async fn handler_infrastructure(
 // AWS Cost Explorer spend (admin-only)
 // ---------------------------------------------------------------------------
 
+const SPEND_CACHE_TTL_SECS: i64 = 6 * 3600; // 6 hours
+
 async fn handler_spend(
     State(s): State<DashState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, StatusCode> {
     require_admin(&headers)?;
 
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+    let now_secs = chrono::Utc::now().timestamp();
+
+    // Check cache
+    if let Ok(resp) = s
+        .ddb
+        .get_item()
+        .table_name(&table_name)
+        .key("pk", AttributeValue::S("cache#spend".to_string()))
+        .key("sk", AttributeValue::S("latest".to_string()))
+        .send()
+        .await
+    {
+        if let Some(item) = resp.item() {
+            let cached_at = item
+                .get("cached_at")
+                .and_then(|v| v.as_n().ok())
+                .and_then(|n| n.parse::<i64>().ok())
+                .unwrap_or(0);
+            if now_secs - cached_at < SPEND_CACHE_TTL_SECS {
+                if let Some(payload) = item.get("payload").and_then(|v| v.as_s().ok()) {
+                    if let Ok(mut json) = serde_json::from_str::<Value>(payload) {
+                        json["cached"] = serde_json::json!(true);
+                        json["cached_at"] = serde_json::json!(
+                            chrono::DateTime::from_timestamp(cached_at, 0)
+                                .map(|dt| dt.format("%Y-%m-%dT%H:%M:%SZ").to_string())
+                                .unwrap_or_default()
+                        );
+                        return Ok(Json(json));
+                    }
+                }
+            }
+        }
+    }
+
+    // Cache miss — fetch from Cost Explorer
     let now = chrono::Utc::now();
     let start = (now - chrono::Duration::days(30))
         .format("%Y-%m-%d")
@@ -880,20 +918,35 @@ async fn handler_spend(
         }
     }
 
-    // Sort descending by amount
     by_service.sort_by(|a, b| {
         let a_val: f64 = a["amount"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
         let b_val: f64 = b["amount"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
         b_val.partial_cmp(&a_val).unwrap_or(std::cmp::Ordering::Equal)
     });
 
-    Ok(Json(serde_json::json!({
+    let result = serde_json::json!({
         "period": { "start": start, "end": end },
         "by_service": by_service,
         "total": format!("{total:.4}"),
         "currency": currency,
         "fetched_at": now.format("%Y-%m-%dT%H:%M:%SZ").to_string(),
-    })))
+        "cached": false,
+    });
+
+    // Write to cache
+    let _ = s
+        .ddb
+        .put_item()
+        .table_name(&table_name)
+        .item("pk", AttributeValue::S("cache#spend".to_string()))
+        .item("sk", AttributeValue::S("latest".to_string()))
+        .item("payload", AttributeValue::S(result.to_string()))
+        .item("cached_at", AttributeValue::N(now_secs.to_string()))
+        .item("ttl", AttributeValue::N((now_secs + SPEND_CACHE_TTL_SECS).to_string()))
+        .send()
+        .await;
+
+    Ok(Json(result))
 }
 
 // ---------------------------------------------------------------------------
