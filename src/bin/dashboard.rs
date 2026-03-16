@@ -31,6 +31,34 @@ struct DashState {
 // GitHub build monitoring structs
 // ---------------------------------------------------------------------------
 
+#[derive(Deserialize, Serialize)]
+struct GhPrUser {
+    login: String,
+}
+
+#[derive(Deserialize, Serialize)]
+struct GhPr {
+    number: u64,
+    title: String,
+    html_url: String,
+    created_at: String,
+    updated_at: String,
+    user: GhPrUser,
+    draft: bool,
+}
+
+#[derive(Serialize)]
+struct PrSummary {
+    repo: String,
+    number: u64,
+    title: String,
+    html_url: String,
+    author: String,
+    created_at: String,
+    updated_at: String,
+    draft: bool,
+}
+
 #[derive(Deserialize)]
 struct GhRun {
     status: String,
@@ -635,6 +663,74 @@ async fn handler_builds(
 }
 
 // ---------------------------------------------------------------------------
+// Open pull requests (admin-only)
+// ---------------------------------------------------------------------------
+
+async fn fetch_repo_prs(state: &DashState, repo: &str) -> Vec<PrSummary> {
+    let token = match &state.github_token {
+        Some(t) => t.clone(),
+        None => return vec![],
+    };
+    let url = format!(
+        "https://api.github.com/repos/rodmen07/{repo}/pulls?state=open&per_page=20"
+    );
+    let result = state
+        .http
+        .get(&url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("Accept", "application/vnd.github+json")
+        .send()
+        .await;
+
+    match result {
+        Ok(resp) if resp.status().is_success() => {
+            resp.json::<Vec<GhPr>>().await.unwrap_or_default()
+                .into_iter()
+                .map(|pr| PrSummary {
+                    repo: repo.to_string(),
+                    number: pr.number,
+                    title: pr.title,
+                    html_url: pr.html_url,
+                    author: pr.user.login,
+                    created_at: pr.created_at,
+                    updated_at: pr.updated_at,
+                    draft: pr.draft,
+                })
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+async fn handler_prs(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<PrSummary>>, StatusCode> {
+    require_admin(&headers)?;
+
+    const REPOS: &[&str] = &[
+        "backend-service",
+        "frontend-service",
+        "auth-service",
+        "ai-orchestrator-service",
+        "dynamodb_prototype",
+    ];
+
+    let (r0, r1, r2, r3, r4) = tokio::join!(
+        fetch_repo_prs(&s, REPOS[0]),
+        fetch_repo_prs(&s, REPOS[1]),
+        fetch_repo_prs(&s, REPOS[2]),
+        fetch_repo_prs(&s, REPOS[3]),
+        fetch_repo_prs(&s, REPOS[4]),
+    );
+
+    let mut prs: Vec<PrSummary> = [r0, r1, r2, r3, r4].into_iter().flatten().collect();
+    // Sort by most recently updated
+    prs.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    Ok(Json(prs))
+}
+
+// ---------------------------------------------------------------------------
 // CloudWatch infrastructure metrics
 // ---------------------------------------------------------------------------
 
@@ -1063,6 +1159,7 @@ async fn main() {
         .route("/api/silver", get(handler_silver))
         .route("/api/overview", get(handler_overview))
         .route("/api/builds", get(handler_builds))
+        .route("/api/prs", get(handler_prs))
         .route("/api/infrastructure", get(handler_infrastructure))
         .route("/api/spend", get(handler_spend))
         .route("/api/contact", post(handler_contact_submit))

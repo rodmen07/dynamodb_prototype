@@ -59,13 +59,17 @@
           statusEl.textContent = 'No AI logs yet.';
           return;
         }
-        data.sort(function(a, b){ return (b.logged_at||'').localeCompare(a.logged_at||''); });
+        data.sort(function(a, b){
+          var at = (a.data||a).logged_at||''; var bt = (b.data||b).logged_at||'';
+          return bt.localeCompare(at);
+        });
         data.forEach(function(item) {
-          var when = item.logged_at ? new Date(item.logged_at).toLocaleString() : '—';
-          var model = item.model ? item.model.split('-').slice(0,3).join('-') : '—';
-          var tokensIn = item.input_tokens != null ? item.input_tokens : '—';
-          var tokensOut = item.output_tokens != null ? item.output_tokens : '—';
-          var dur = item.duration_ms != null ? Math.round(item.duration_ms) + 'ms' : '—';
+          var d = item.data || item;
+          var when = d.logged_at ? new Date(d.logged_at).toLocaleString() : '—';
+          var model = d.model ? d.model.split('-').slice(0,3).join('-') : '—';
+          var tokensIn = d.input_tokens != null ? d.input_tokens : '—';
+          var tokensOut = d.output_tokens != null ? d.output_tokens : '—';
+          var dur = d.duration_ms != null ? Math.round(d.duration_ms) + 'ms' : '—';
           var card = document.createElement('div');
           card.className = 'card';
           card.innerHTML =
@@ -78,9 +82,9 @@
               '<div class="card-time">' + esc(when) + '</div>' +
             '</div>' +
             '<div class="label">Prompt</div>' +
-            '<div class="card-prompt">' + esc(item.prompt||'') + '</div>' +
+            '<div class="card-prompt">' + esc(d.prompt||'') + '</div>' +
             '<div class="label">Response</div>' +
-            '<div class="card-response">' + esc(item.response||'') + '</div>';
+            '<div class="card-response">' + esc(d.response||'') + '</div>';
           cards.appendChild(card);
         });
         statusEl.style.display = 'none';

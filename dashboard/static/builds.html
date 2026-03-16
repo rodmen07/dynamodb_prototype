@@ -35,6 +35,19 @@
     .label-red{background:#fee2e2;color:#991b1b}
     .label-unknown{background:#f3f4f6;color:#4b5563}
     .cached-badge{font-size:.7rem;color:#9ca3af;margin-left:4px}
+    .section-title{font-size:1.1rem;font-weight:700;margin:28px 0 4px}
+    .section-sub{font-size:.85rem;color:#666;margin:0 0 14px}
+    .pr-list{display:flex;flex-direction:column;gap:10px;max-width:720px}
+    .pr-card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;display:flex;align-items:flex-start;gap:12px}
+    .pr-number{font-size:.8rem;font-weight:700;color:#6b7280;white-space:nowrap;padding-top:1px}
+    .pr-body{flex:1;min-width:0}
+    .pr-title{font-size:.9rem;font-weight:600;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .pr-meta{font-size:.75rem;color:#9ca3af;margin-top:3px}
+    .pr-repo{font-size:.72rem;font-weight:600;background:#f1f5f9;border-radius:4px;padding:1px 6px;color:#475569}
+    .pr-draft{font-size:.72rem;font-weight:600;background:#fef3c7;border-radius:4px;padding:1px 6px;color:#92400e}
+    .pr-link{font-size:.78rem;color:#2563eb;text-decoration:none;white-space:nowrap;padding:3px 8px;border:1px solid #bfdbfe;border-radius:5px}
+    .pr-link:hover{background:#dbeafe}
+    .pr-empty{font-size:.875rem;color:#9ca3af;font-style:italic;padding:12px 0}
   </style>
 </head>
 <body>
@@ -46,6 +59,12 @@
 
   <div id="global-status" class="status loading">Loading build status…</div>
   <div class="grid" id="build-grid"></div>
+  <div id="pr-section" style="display:none">
+    <p class="section-title">Open Pull Requests</p>
+    <p class="section-sub">Open PRs across all repositories.</p>
+    <div id="pr-status" class="status loading" style="display:none">Loading PRs…</div>
+    <div class="pr-list" id="pr-list"></div>
+  </div>
   <div class="refresh" id="refresh-note"></div>
 
   <script>
@@ -106,8 +125,52 @@
         'Last updated: ' + new Date().toLocaleTimeString();
     }
 
+    async function loadPRs() {
+      if (!DashAuth.isAdmin()) return;
+      document.getElementById('pr-section').style.display = '';
+      const ps = document.getElementById('pr-status');
+      ps.style.display = '';
+      ps.className = 'status loading';
+      ps.textContent = 'Loading PRs…';
+      const list = document.getElementById('pr-list');
+      list.innerHTML = '';
+      try {
+        const r = await DashAuth.authFetch('/api/prs');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const prs = await r.json();
+        ps.style.display = 'none';
+        if (!prs.length) {
+          list.innerHTML = '<p class="pr-empty">No open pull requests.</p>';
+          return;
+        }
+        prs.forEach(function(pr) {
+          var updated = relativeTime(pr.updated_at);
+          var card = document.createElement('div');
+          card.className = 'pr-card';
+          card.innerHTML =
+            '<span class="pr-number">#' + pr.number + '</span>' +
+            '<div class="pr-body">' +
+              '<div class="pr-title" title="' + pr.title + '">' + pr.title + '</div>' +
+              '<div class="pr-meta">' +
+                '<span class="pr-repo">' + pr.repo + '</span>' +
+                (pr.draft ? ' <span class="pr-draft">Draft</span>' : '') +
+                ' &nbsp;by <strong>' + pr.author + '</strong>' +
+                ' &nbsp;· updated ' + updated +
+              '</div>' +
+            '</div>' +
+            '<a class="pr-link" href="' + pr.html_url + '" target="_blank" rel="noopener">View →</a>';
+          list.appendChild(card);
+        });
+      } catch(e) {
+        ps.className = 'status error';
+        ps.textContent = 'Could not load PRs: ' + e.message;
+      }
+    }
+
     loadAll();
+    loadPRs();
     setInterval(loadAll, 60000);
+    setInterval(loadPRs, 120000);
   </script>
 </body>
 </html>
