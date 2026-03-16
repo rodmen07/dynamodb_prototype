@@ -820,7 +820,7 @@ async fn handler_infrastructure(
 // AWS Cost Explorer spend (admin-only)
 // ---------------------------------------------------------------------------
 
-const SPEND_CACHE_TTL_SECS: i64 = 6 * 3600; // 6 hours
+const SPEND_CACHE_TTL_SECS: i64 = 24 * 3600; // 24 hours
 
 async fn handler_spend(
     State(s): State<DashState>,
