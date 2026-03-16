@@ -1,6 +1,6 @@
 use axum::{
     extract::State,
-    http::{HeaderMap, HeaderValue, Method, StatusCode},
+    http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::Html,
     routing::{get, post},
     Json, Router,
@@ -198,6 +198,65 @@ async fn handler_stats(
         }
     }
     Ok(Json(serde_json::json!({"counts": counts})))
+}
+
+// ---------------------------------------------------------------------------
+// Contact form
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct ContactBody {
+    name: String,
+    email: String,
+    message: String,
+}
+
+async fn handler_contact_submit(
+    State(s): State<DashState>,
+    Json(body): Json<ContactBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let name = body.name.trim().to_string();
+    let email = body.email.trim().to_string();
+    let message = body.message.trim().to_string();
+
+    if name.is_empty() || email.is_empty() || message.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "name, email, and message are required".to_string()));
+    }
+    if message.len() > 4000 {
+        return Err((StatusCode::BAD_REQUEST, "message too long (max 4000 characters)".to_string()));
+    }
+
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+    let id = uuid::Uuid::new_v4().to_string();
+    let now = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string();
+    let payload_str = serde_json::json!({
+        "id": id,
+        "name": name,
+        "email": email,
+        "message": message,
+        "submitted_at": now,
+    }).to_string();
+
+    s.ddb
+        .put_item()
+        .table_name(table_name)
+        .item("pk", AttributeValue::S("source#contact-form".to_string()))
+        .item("sk", AttributeValue::S(format!("contact#{id}")))
+        .item("payload", AttributeValue::S(payload_str))
+        .item("submitted_at", AttributeValue::S(now))
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    Ok(StatusCode::ACCEPTED)
+}
+
+async fn handler_contact_inbox(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    list_stage(&s.ddb, "contact#").await.map(Json)
 }
 
 #[derive(Deserialize)]
@@ -813,6 +872,10 @@ async fn spend_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/spend.html"))
 }
 
+async fn messages_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/messages.html"))
+}
+
 async fn auth_js() -> impl axum::response::IntoResponse {
     (
         [(axum::http::header::CONTENT_TYPE, "application/javascript")],
@@ -864,7 +927,8 @@ async fn main() {
                 .collect();
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(headers))
-                .allow_methods([Method::GET])
+                .allow_methods([Method::GET, Method::POST])
+                .allow_headers([header::CONTENT_TYPE])
         }
         _ => CorsLayer::new(),
     };
@@ -877,6 +941,7 @@ async fn main() {
         .route("/builds", get(builds_html))
         .route("/infrastructure", get(infrastructure_html))
         .route("/spend", get(spend_html))
+        .route("/messages", get(messages_html))
         .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
@@ -886,6 +951,8 @@ async fn main() {
         .route("/api/builds", get(handler_builds))
         .route("/api/infrastructure", get(handler_infrastructure))
         .route("/api/spend", get(handler_spend))
+        .route("/api/contact", post(handler_contact_submit))
+        .route("/api/contacts", get(handler_contact_inbox))
         .route("/ingest", post(handler_ingest))
         .route("/promote", post(handler_promote))
         .with_state(state)

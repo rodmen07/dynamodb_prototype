@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Messages — Dashboard</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .status.empty{background:#f0fdf4;color:#166534}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:8px}
+    .cards{display:flex;flex-direction:column;gap:12px}
+    .card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px 20px}
+    .card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
+    .card-from{font-weight:600;font-size:.95rem}
+    .card-email{font-size:.8rem;color:#666;margin-top:2px}
+    .card-time{font-size:.75rem;color:#999;white-space:nowrap}
+    .card-body{font-size:.875rem;line-height:1.6;color:#333;white-space:pre-wrap;word-break:break-word}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('messages'); DashAuth.guardAdminPage();</script>
+  <h1>Messages</h1>
+  <p class="sub">Contact form submissions stored in DynamoDB.</p>
+  <div class="refresh" id="refresh-note"></div>
+  <div id="status-msg" class="status loading">Loading messages…</div>
+  <div class="cards" id="cards" style="display:none"></div>
+  <script>
+    function esc(v){
+      return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    async function load() {
+      var statusEl = document.getElementById('status-msg');
+      var cards = document.getElementById('cards');
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading messages…';
+      statusEl.style.display = '';
+      cards.style.display = 'none';
+      try {
+        var res = await DashAuth.authFetch('/api/contacts');
+        if (res.status === 401) { statusEl.className='status error'; statusEl.textContent='Not authorised.'; return; }
+        if (!res.ok) throw new Error('API error ' + res.status);
+        var data = await res.json();
+        cards.innerHTML = '';
+        if (!data.length) {
+          statusEl.className = 'status empty';
+          statusEl.textContent = 'No messages yet.';
+          return;
+        }
+        data.sort(function(a, b){ return (b.submitted_at||'').localeCompare(a.submitted_at||''); });
+        data.forEach(function(item) {
+          var when = item.submitted_at ? new Date(item.submitted_at).toLocaleString() : '—';
+          var card = document.createElement('div');
+          card.className = 'card';
+          card.innerHTML =
+            '<div class="card-header">' +
+              '<div><div class="card-from">' + esc(item.name||'—') + '</div>' +
+              '<div class="card-email">' + esc(item.email||'—') + '</div></div>' +
+              '<div class="card-time">' + esc(when) + '</div>' +
+            '</div>' +
+            '<div class="card-body">' + esc(item.message||'') + '</div>';
+          cards.appendChild(card);
+        });
+        statusEl.style.display = 'none';
+        cards.style.display = '';
+      } catch(e) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Error: ' + e.message;
+      }
+    }
+    async function loadAll() {
+      await load();
+      document.getElementById('refresh-note').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }
+    loadAll();
+    setInterval(loadAll, 60000);
+  </script>
+</body>
+</html>

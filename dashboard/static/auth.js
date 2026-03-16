@@ -10,6 +10,7 @@
     { key: 'builds',         label: 'Builds',         href: '/builds',         admin: false },
     { key: 'infrastructure', label: 'Infrastructure', href: '/infrastructure', admin: true  },
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
+    { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
   ];
 
   function getToken() {
