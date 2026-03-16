@@ -616,7 +616,6 @@ async fn handler_builds(
     State(s): State<DashState>,
 ) -> Result<Json<Vec<BuildStatus>>, StatusCode> {
     const REPOS: &[&str] = &[
-        "go-pipeline-monitor",
         "backend-service",
         "frontend-service",
         "auth-service",
@@ -624,16 +623,15 @@ async fn handler_builds(
         "dynamodb_prototype",
     ];
 
-    let (r0, r1, r2, r3, r4, r5) = tokio::join!(
+    let (r0, r1, r2, r3, r4) = tokio::join!(
         get_cached_or_fetch(&s, REPOS[0]),
         get_cached_or_fetch(&s, REPOS[1]),
         get_cached_or_fetch(&s, REPOS[2]),
         get_cached_or_fetch(&s, REPOS[3]),
         get_cached_or_fetch(&s, REPOS[4]),
-        get_cached_or_fetch(&s, REPOS[5]),
     );
 
-    Ok(Json(vec![r0, r1, r2, r3, r4, r5]))
+    Ok(Json(vec![r0, r1, r2, r3, r4]))
 }
 
 // ---------------------------------------------------------------------------
