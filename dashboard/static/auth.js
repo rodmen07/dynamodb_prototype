@@ -11,6 +11,7 @@
     { key: 'infrastructure', label: 'Infrastructure', href: '/infrastructure', admin: true  },
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
     { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
+    { key: 'ai-logs',        label: 'AI Logs',        href: '/ai-logs',        admin: true  },
   ];
 
   function getToken() {

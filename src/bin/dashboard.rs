@@ -201,6 +201,64 @@ async fn handler_stats(
 }
 
 // ---------------------------------------------------------------------------
+// AI consult logs
+// ---------------------------------------------------------------------------
+
+async fn query_by_pk(
+    ddb: &Client,
+    pk_value: &str,
+) -> Result<Vec<Value>, (StatusCode, String)> {
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+
+    let mut expr_vals = HashMap::new();
+    expr_vals.insert(":pk".to_string(), AttributeValue::S(pk_value.to_string()));
+
+    let resp = ddb
+        .query()
+        .table_name(table_name)
+        .key_condition_expression("pk = :pk")
+        .set_expression_attribute_values(Some(expr_vals))
+        .scan_index_forward(false)
+        .send()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Dynamo error: {e}")))?;
+
+    let mut out = vec![];
+    for it in resp.items() {
+        if let Some(payload_attr) = it.get("payload") {
+            if let Ok(s) = payload_attr.as_s() {
+                if let Ok(json) = serde_json::from_str::<Value>(s) {
+                    out.push(json);
+                    continue;
+                }
+            }
+        }
+        let mut m = serde_json::Map::new();
+        for (k, v) in it {
+            let j = match v {
+                AttributeValue::S(s) => Value::String(s.clone()),
+                AttributeValue::N(n) => Value::String(n.clone()),
+                _ => Value::String(format!(
+                    "<{}>",
+                    v.as_s().ok().map(|s| s.as_str()).unwrap_or("")
+                )),
+            };
+            m.insert(k.clone(), j);
+        }
+        out.push(Value::Object(m));
+    }
+    Ok(out)
+}
+
+async fn handler_ai_logs(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<Value>>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    query_by_pk(&s.ddb, "source#ai-consult").await.map(Json)
+}
+
+// ---------------------------------------------------------------------------
 // Contact form
 // ---------------------------------------------------------------------------
 
@@ -876,6 +934,10 @@ async fn messages_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/messages.html"))
 }
 
+async fn ai_logs_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/ai_logs.html"))
+}
+
 async fn auth_js() -> impl axum::response::IntoResponse {
     (
         [(axum::http::header::CONTENT_TYPE, "application/javascript")],
@@ -942,6 +1004,7 @@ async fn main() {
         .route("/infrastructure", get(infrastructure_html))
         .route("/spend", get(spend_html))
         .route("/messages", get(messages_html))
+        .route("/ai-logs", get(ai_logs_html))
         .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
@@ -953,6 +1016,7 @@ async fn main() {
         .route("/api/spend", get(handler_spend))
         .route("/api/contact", post(handler_contact_submit))
         .route("/api/contacts", get(handler_contact_inbox))
+        .route("/api/ai-logs", get(handler_ai_logs))
         .route("/ingest", post(handler_ingest))
         .route("/promote", post(handler_promote))
         .with_state(state)
