@@ -16,12 +16,31 @@
     .status.loading{background:#eef2ff;color:#3730a3}
     .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
     .status.empty{background:#f0fdf4;color:#166534}
-    .refresh{font-size:.8rem;color:#888;margin-bottom:8px}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:16px}
+
+    /* Topic breakdown */
+    .breakdown{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .breakdown-chip{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:.78rem;font-weight:600;border:1px solid transparent}
+    .breakdown-chip .count{font-size:.7rem;opacity:.75}
+    .topic-security{background:#fee2e2;color:#991b1b;border-color:#fecaca}
+    .topic-ai{background:#ede9fe;color:#5b21b6;border-color:#ddd6fe}
+    .topic-devops{background:#fef3c7;color:#92400e;border-color:#fde68a}
+    .topic-infra{background:#dbeafe;color:#1e40af;border-color:#bfdbfe}
+    .topic-full-stack{background:#d1fae5;color:#065f46;border-color:#a7f3d0}
+    .topic-other{background:#f1f5f9;color:#475569;border-color:#e2e8f0}
+
+    /* Filter bar */
+    .filter-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;align-items:center}
+    .filter-bar span{font-size:.8rem;color:#666;margin-right:4px}
+    .filter-btn{padding:3px 10px;border-radius:12px;border:1px solid #e2e8f0;background:#fff;font-size:.78rem;cursor:pointer;color:#475569}
+    .filter-btn.active{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+
     .cards{display:flex;flex-direction:column;gap:12px}
     .card{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px 20px}
     .card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
-    .card-meta{display:flex;gap:12px;flex-wrap:wrap;font-size:.75rem;color:#888}
+    .card-meta{display:flex;gap:8px;flex-wrap:wrap;font-size:.75rem;color:#888;align-items:center}
     .card-meta span{background:#f1f5f9;border-radius:4px;padding:2px 7px}
+    .topic-badge{border-radius:20px;padding:2px 8px;font-size:.7rem;font-weight:700;border:1px solid transparent}
     .card-time{font-size:.75rem;color:#999;white-space:nowrap}
     .label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#aaa;margin-bottom:3px}
     .card-prompt{font-size:.875rem;line-height:1.5;color:#333;white-space:pre-wrap;word-break:break-word;background:#f8f9fb;border-radius:6px;padding:8px 12px;margin-bottom:10px}
@@ -35,65 +54,137 @@
   <h1>AI Logs</h1>
   <p class="sub">Visitor prompts and AI responses from the portfolio site.</p>
   <div class="refresh" id="refresh-note"></div>
+  <div id="breakdown" class="breakdown" style="display:none"></div>
+  <div id="filter-bar" class="filter-bar" style="display:none"></div>
   <div id="status-msg" class="status loading">Loading logs…</div>
   <div class="cards" id="cards" style="display:none"></div>
   <script>
-    function esc(v){
+    var activeFilter = 'all';
+
+    var TOPIC_STYLES = {
+      security:    'topic-security',
+      ai:          'topic-ai',
+      devops:      'topic-devops',
+      infra:       'topic-infra',
+      'full-stack':'topic-full-stack',
+      other:       'topic-other',
+    };
+
+    function esc(v) {
       return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     }
+
+    function topicClass(topic) {
+      return TOPIC_STYLES[topic] || 'topic-other';
+    }
+
+    var allData = [];
+
+    function renderBreakdown(data) {
+      var counts = {};
+      data.forEach(function(item) {
+        var t = (item.data||item).topic || 'other';
+        counts[t] = (counts[t] || 0) + 1;
+      });
+      var bd = document.getElementById('breakdown');
+      bd.innerHTML = '';
+      var total = data.length;
+      // All chip
+      var allChip = document.createElement('button');
+      allChip.className = 'breakdown-chip filter-btn' + (activeFilter === 'all' ? ' active' : '');
+      allChip.setAttribute('data-topic', 'all');
+      allChip.innerHTML = 'All <span class="count">(' + total + ')</span>';
+      allChip.onclick = function() { setFilter('all'); };
+      bd.appendChild(allChip);
+
+      Object.keys(counts).sort().forEach(function(topic) {
+        var chip = document.createElement('button');
+        chip.className = 'breakdown-chip ' + topicClass(topic) + (activeFilter === topic ? ' active' : '');
+        chip.setAttribute('data-topic', topic);
+        chip.innerHTML = esc(topic) + ' <span class="count">(' + counts[topic] + ')</span>';
+        chip.onclick = (function(t){ return function(){ setFilter(t); }; })(topic);
+        bd.appendChild(chip);
+      });
+      bd.style.display = '';
+    }
+
+    function setFilter(topic) {
+      activeFilter = topic;
+      renderCards(allData);
+      renderBreakdown(allData);
+    }
+
+    function renderCards(data) {
+      var cards = document.getElementById('cards');
+      var filtered = activeFilter === 'all' ? data : data.filter(function(item) {
+        return ((item.data||item).topic || 'other') === activeFilter;
+      });
+      cards.innerHTML = '';
+      if (!filtered.length) {
+        cards.innerHTML = '<p style="color:#888;font-size:.9rem">No logs for this topic.</p>';
+        cards.style.display = '';
+        return;
+      }
+      filtered.forEach(function(item) {
+        var d = item.data || item;
+        var when = d.logged_at ? new Date(d.logged_at).toLocaleString() : '—';
+        var model = d.model ? d.model.split('-').slice(0,3).join('-') : '—';
+        var tokensIn = d.input_tokens != null ? d.input_tokens : '—';
+        var tokensOut = d.output_tokens != null ? d.output_tokens : '—';
+        var dur = d.duration_ms != null ? Math.round(d.duration_ms) + 'ms' : '—';
+        var topic = d.topic || 'other';
+        var card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML =
+          '<div class="card-header">' +
+            '<div class="card-meta">' +
+              '<span class="topic-badge ' + topicClass(topic) + '">' + esc(topic) + '</span>' +
+              '<span>' + esc(model) + '</span>' +
+              '<span>in: ' + esc(tokensIn) + ' / out: ' + esc(tokensOut) + '</span>' +
+              '<span>' + esc(dur) + '</span>' +
+            '</div>' +
+            '<div class="card-time">' + esc(when) + '</div>' +
+          '</div>' +
+          '<div class="label">Prompt</div>' +
+          '<div class="card-prompt">' + esc(d.prompt||'') + '</div>' +
+          '<div class="label">Response</div>' +
+          '<div class="card-response">' + esc(d.response||'') + '</div>';
+        cards.appendChild(card);
+      });
+      cards.style.display = '';
+    }
+
     async function load() {
       var statusEl = document.getElementById('status-msg');
-      var cards = document.getElementById('cards');
       statusEl.className = 'status loading';
       statusEl.textContent = 'Loading logs…';
       statusEl.style.display = '';
-      cards.style.display = 'none';
+      document.getElementById('cards').style.display = 'none';
+      document.getElementById('breakdown').style.display = 'none';
       try {
         var res = await DashAuth.authFetch('/api/ai-logs');
         if (res.status === 401) { statusEl.className='status error'; statusEl.textContent='Not authorised.'; return; }
         if (!res.ok) throw new Error('API error ' + res.status);
         var data = await res.json();
-        cards.innerHTML = '';
         if (!data.length) {
           statusEl.className = 'status empty';
           statusEl.textContent = 'No AI logs yet.';
           return;
         }
-        data.sort(function(a, b){
+        data.sort(function(a, b) {
           var at = (a.data||a).logged_at||''; var bt = (b.data||b).logged_at||'';
           return bt.localeCompare(at);
         });
-        data.forEach(function(item) {
-          var d = item.data || item;
-          var when = d.logged_at ? new Date(d.logged_at).toLocaleString() : '—';
-          var model = d.model ? d.model.split('-').slice(0,3).join('-') : '—';
-          var tokensIn = d.input_tokens != null ? d.input_tokens : '—';
-          var tokensOut = d.output_tokens != null ? d.output_tokens : '—';
-          var dur = d.duration_ms != null ? Math.round(d.duration_ms) + 'ms' : '—';
-          var card = document.createElement('div');
-          card.className = 'card';
-          card.innerHTML =
-            '<div class="card-header">' +
-              '<div class="card-meta">' +
-                '<span>' + esc(model) + '</span>' +
-                '<span>in: ' + esc(tokensIn) + ' / out: ' + esc(tokensOut) + '</span>' +
-                '<span>' + esc(dur) + '</span>' +
-              '</div>' +
-              '<div class="card-time">' + esc(when) + '</div>' +
-            '</div>' +
-            '<div class="label">Prompt</div>' +
-            '<div class="card-prompt">' + esc(d.prompt||'') + '</div>' +
-            '<div class="label">Response</div>' +
-            '<div class="card-response">' + esc(d.response||'') + '</div>';
-          cards.appendChild(card);
-        });
+        allData = data;
         statusEl.style.display = 'none';
-        cards.style.display = '';
+        renderBreakdown(data);
+        renderCards(data);
       } catch(e) {
         statusEl.className = 'status error';
         statusEl.textContent = 'Error: ' + e.message;
       }
     }
+
     async function loadAll() {
       await load();
       document.getElementById('refresh-note').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
