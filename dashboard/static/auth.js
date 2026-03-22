@@ -9,6 +9,9 @@
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
     { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
     { key: 'ai-logs',        label: 'AI Logs',        href: '/ai-logs',        admin: true  },
+    { key: 'search',         label: 'Search',         href: 'https://rodmen07.github.io/frontend-service/#/search', admin: false, target: '_blank' },
+    { key: 'reports',        label: 'Reports',        href: 'https://rodmen07.github.io/frontend-service/#/crm/reports', admin: false, target: '_blank' },
+    { key: 'observaboard',   label: 'Observaboard',   href: 'https://rodmen07.github.io/observaboard/', admin: false, target: '_blank' },
   ];
 
   function getToken() {
@@ -41,7 +44,8 @@
     navEl.innerHTML = ALL_TABS
       .filter(function (t) { return admin || !t.admin; })
       .map(function (t) {
-        return '<a href="' + t.href + '"' + (t.key === activeKey ? ' class="active"' : '') + '>' + t.label + '</a>';
+        var target = t.target ? ' target="' + t.target + '" rel="noopener noreferrer"' : '';
+        return '<a href="' + t.href + '"' + target + (t.key === activeKey ? ' class="active"' : '') + '>' + t.label + '</a>';
       })
       .join('');
   }
