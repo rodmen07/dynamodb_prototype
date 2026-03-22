@@ -4,9 +4,6 @@
 
   var ALL_TABS = [
     { key: 'overview',       label: 'Overview',       href: '/overview',       admin: true  },
-    { key: 'gold',           label: 'Gold',           href: '/',               admin: false },
-    { key: 'silver',         label: 'Silver',         href: '/silver',         admin: false },
-    { key: 'bronze',         label: 'Bronze',         href: '/bronze',         admin: false },
     { key: 'builds',         label: 'Builds',         href: '/builds',         admin: false },
     { key: 'infrastructure', label: 'Infrastructure', href: '/infrastructure', admin: true  },
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
