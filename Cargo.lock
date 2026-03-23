@@ -126,9 +126,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-cloudwatch"
-version = "1.107.0"
+version = "1.108.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21cd65a785c8d6b21626ee7a08c67a63910424ceb5f68d2cb3e8483d78010637"
+checksum = "b74059630576b811889a65fdfff80c9e2b4b1f0a3af65c84cd5d3f8264e7f9c1"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -457,9 +457,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.6"
+version = "1.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2b1117b3b2bbe166d11199b540ceed0d0f7676e36e7b962b5a437a9971eac75"
+checksum = "9d73dbfbaa8e4bc57b9045137680b958d274823509a360abfd8e1d514d40c95c"
 dependencies = [
  "base64-simd",
  "bytes",
