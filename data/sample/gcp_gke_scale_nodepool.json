@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-009",
+  "event_name": "SetNodePoolSize",
+  "actor": "platform-team@company.com",
+  "source_ip": "198.51.100.75",
+  "resource": "projects/proj-prod/zones/us-central1-a/clusters/prod-cluster/nodePools/default-pool",
+  "event_time_epoch": 1711108800,
+  "severity": "medium",
+  "service": "container.googleapis.com",
+  "region": "us-central1-a",
+  "user_agent": "kubectl/v1.29.0",
+  "raw_payload": "{\"methodName\":\"google.container.v1.ClusterManager.SetNodePoolSize\",\"resourceName\":\"projects/proj-prod/zones/us-central1-a/clusters/prod-cluster/nodePools/default-pool\",\"request\":{\"nodeCount\":5}}"
+}

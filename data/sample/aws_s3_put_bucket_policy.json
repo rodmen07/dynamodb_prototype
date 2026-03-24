@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-002",
+  "event_name": "PutBucketPolicy",
+  "actor": "arn:aws:iam::123456789012:user/admin",
+  "source_ip": "203.0.113.10",
+  "resource": "arn:aws:s3:::prod-artifacts-bucket",
+  "event_time_epoch": 1711040400,
+  "severity": "high",
+  "service": "s3.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "aws-cli/2.15.0",
+  "raw_payload": "{\"bucketName\":\"prod-artifacts-bucket\",\"policy\":\"{\\\"Effect\\\":\\\"Allow\\\",\\\"Principal\\\":\\\"*\\\"}\"}"
+}

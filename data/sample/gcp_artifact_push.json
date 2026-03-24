@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-007",
+  "event_name": "DockerPush",
+  "actor": "github-actions@proj-prod.iam.gserviceaccount.com",
+  "source_ip": "140.82.112.22",
+  "resource": "us-docker.pkg.dev/proj-prod/services/api-service:v1.2.3",
+  "event_time_epoch": 1711101600,
+  "severity": "low",
+  "service": "artifactregistry.googleapis.com",
+  "region": "us",
+  "user_agent": "docker/25.0.3",
+  "raw_payload": "{\"methodName\":\"docker.push\",\"resourceName\":\"us-docker.pkg.dev/proj-prod/services/api-service\",\"request\":{\"tag\":\"v1.2.3\",\"digest\":\"sha256:abc123def456\"}}"
+}

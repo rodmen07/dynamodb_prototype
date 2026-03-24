@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-013",
+  "event_name": "UpdateWebACL",
+  "actor": "arn:aws:iam::123456789012:role/security-automation",
+  "source_ip": "10.0.3.12",
+  "resource": "arn:aws:wafv2:us-east-1:123456789012:regional/webacl/prod-waf/abc123",
+  "event_time_epoch": 1711116000,
+  "severity": "medium",
+  "service": "wafv2.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "aws-sdk-python/1.34.0",
+  "raw_payload": "{\"name\":\"prod-waf\",\"rules\":[{\"name\":\"rate-limit\",\"priority\":1,\"action\":{\"block\":{}},\"statement\":{\"rateBasedStatement\":{\"limit\":2000}}}]}"
+}

@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-004",
+  "event_name": "DeleteFirewall",
+  "actor": "admin@company.com",
+  "source_ip": "203.0.113.50",
+  "resource": "projects/proj-prod/global/firewalls/allow-internal",
+  "event_time_epoch": 1711090800,
+  "severity": "critical",
+  "service": "compute.googleapis.com",
+  "region": "global",
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+  "raw_payload": "{\"methodName\":\"v1.compute.firewalls.delete\",\"resourceName\":\"projects/proj-prod/global/firewalls/allow-internal\"}"
+}

@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-012",
+  "event_name": "CreateTable",
+  "actor": "arn:aws:iam::123456789012:role/terraform-provisioner",
+  "source_ip": "140.82.112.22",
+  "resource": "arn:aws:dynamodb:us-east-1:123456789012:table/audit-events",
+  "event_time_epoch": 1711076400,
+  "severity": "medium",
+  "service": "dynamodb.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "terraform/1.7.0",
+  "raw_payload": "{\"tableName\":\"audit-events\",\"billingMode\":\"PAY_PER_REQUEST\",\"keySchema\":[{\"attributeName\":\"pk\",\"keyType\":\"HASH\"},{\"attributeName\":\"sk\",\"keyType\":\"RANGE\"}]}"
+}

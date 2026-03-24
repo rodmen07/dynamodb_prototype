@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-008",
+  "event_name": "DeleteSink",
+  "actor": "unknown-user@external.com",
+  "source_ip": "45.33.32.156",
+  "resource": "projects/proj-prod/sinks/audit-export",
+  "event_time_epoch": 1711105200,
+  "severity": "critical",
+  "service": "logging.googleapis.com",
+  "region": "global",
+  "user_agent": "gcloud/468.0.0",
+  "raw_payload": "{\"methodName\":\"google.logging.v2.ConfigServiceV2.DeleteSink\",\"resourceName\":\"projects/proj-prod/sinks/audit-export\"}"
+}

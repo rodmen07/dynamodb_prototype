@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-001",
+  "event_name": "SetIamPolicy",
+  "actor": "terraform@proj-prod.iam.gserviceaccount.com",
+  "source_ip": "140.82.112.22",
+  "resource": "projects/proj-prod",
+  "event_time_epoch": 1711080000,
+  "severity": "high",
+  "service": "cloudresourcemanager.googleapis.com",
+  "region": "global",
+  "user_agent": "terraform/1.7.0 google-api-go-client/0.5",
+  "raw_payload": "{\"methodName\":\"SetIamPolicy\",\"resourceName\":\"projects/proj-prod\",\"request\":{\"policy\":{\"bindings\":[{\"role\":\"roles/owner\"}]}}}"
+}

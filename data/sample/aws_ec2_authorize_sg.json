@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-003",
+  "event_name": "AuthorizeSecurityGroupIngress",
+  "actor": "arn:aws:iam::123456789012:user/dev-engineer",
+  "source_ip": "192.0.2.55",
+  "resource": "sg-0abc123def456789",
+  "event_time_epoch": 1711044000,
+  "severity": "critical",
+  "service": "ec2.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "console.amazonaws.com",
+  "raw_payload": "{\"groupId\":\"sg-0abc123def456789\",\"ipPermissions\":[{\"fromPort\":22,\"toPort\":22,\"ipProtocol\":\"tcp\",\"ipRanges\":[{\"cidrIp\":\"0.0.0.0/0\"}]}]}"
+}

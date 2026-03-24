@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-010",
+  "event_name": "CreateServiceAccountKey",
+  "actor": "dev-user@company.com",
+  "source_ip": "203.0.113.88",
+  "resource": "projects/proj-prod/serviceAccounts/deploy-bot@proj-prod.iam.gserviceaccount.com/keys/abc123",
+  "event_time_epoch": 1711112400,
+  "severity": "high",
+  "service": "iam.googleapis.com",
+  "region": "global",
+  "user_agent": "google-cloud-sdk gcloud/468.0.0",
+  "raw_payload": "{\"methodName\":\"google.iam.admin.v1.CreateServiceAccountKey\",\"resourceName\":\"projects/-/serviceAccounts/deploy-bot@proj-prod.iam.gserviceaccount.com\",\"response\":{\"keyAlgorithm\":\"KEY_ALG_RSA_2048\",\"keyOrigin\":\"GOOGLE_PROVIDED\"}}"
+}

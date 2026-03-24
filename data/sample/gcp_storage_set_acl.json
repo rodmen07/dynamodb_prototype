@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-006",
+  "event_name": "SetBucketIamPolicy",
+  "actor": "dev-user@company.com",
+  "source_ip": "192.0.2.100",
+  "resource": "projects/_/buckets/public-assets-bucket",
+  "event_time_epoch": 1711098000,
+  "severity": "high",
+  "service": "storage.googleapis.com",
+  "region": "us",
+  "user_agent": "gsutil/5.27",
+  "raw_payload": "{\"methodName\":\"storage.buckets.setIamPolicy\",\"resourceName\":\"projects/_/buckets/public-assets-bucket\",\"request\":{\"policy\":{\"bindings\":[{\"role\":\"roles/storage.objectViewer\",\"members\":[\"allUsers\"]}]}}}"
+}

@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-002",
+  "event_name": "ReplaceService",
+  "actor": "github-actions@proj-prod.iam.gserviceaccount.com",
+  "source_ip": "140.82.112.22",
+  "resource": "namespaces/proj-prod/services/api-service",
+  "event_time_epoch": 1711083600,
+  "severity": "medium",
+  "service": "run.googleapis.com",
+  "region": "us-central1",
+  "user_agent": "google-cloud-sdk gcloud/468.0.0",
+  "raw_payload": "{\"methodName\":\"v1.namespaces.services.replaceService\",\"resourceName\":\"namespaces/proj-prod/services/api-service\",\"request\":{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"image\":\"us-docker.pkg.dev/proj-prod/services/api:sha-abc123\"}]}}}}}"
+}

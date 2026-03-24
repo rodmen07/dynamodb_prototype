@@ -1,0 +1,14 @@
+{
+  "provider": "gcp",
+  "event_id": "evt-gcp-005",
+  "event_name": "CreateBackupRun",
+  "actor": "system@google.com",
+  "source_ip": "internal",
+  "resource": "projects/proj-prod/instances/prod-db-primary",
+  "event_time_epoch": 1711094400,
+  "severity": "low",
+  "service": "sqladmin.googleapis.com",
+  "region": "us-central1",
+  "user_agent": "google-internal",
+  "raw_payload": "{\"methodName\":\"cloudsql.backupRuns.insert\",\"resourceName\":\"projects/proj-prod/instances/prod-db-primary\",\"response\":{\"status\":\"DONE\",\"type\":\"AUTOMATED\"}}"
+}

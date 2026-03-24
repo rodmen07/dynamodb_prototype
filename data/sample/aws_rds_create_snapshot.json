@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-005",
+  "event_name": "CreateDBSnapshot",
+  "actor": "arn:aws:iam::123456789012:role/rds-backup-automation",
+  "source_ip": "172.16.0.1",
+  "resource": "arn:aws:rds:us-east-1:123456789012:db:prod-primary",
+  "event_time_epoch": 1711051200,
+  "severity": "low",
+  "service": "rds.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "rds-scheduler",
+  "raw_payload": "{\"dbInstanceIdentifier\":\"prod-primary\",\"dbSnapshotIdentifier\":\"prod-primary-2026-03-22\"}"
+}

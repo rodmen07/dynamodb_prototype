@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-006",
+  "event_name": "Decrypt",
+  "actor": "arn:aws:iam::123456789012:role/app-service-role",
+  "source_ip": "10.0.1.47",
+  "resource": "arn:aws:kms:us-east-1:123456789012:key/mrk-abc123",
+  "event_time_epoch": 1711054800,
+  "severity": "low",
+  "service": "kms.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "aws-sdk-rust/1.1.0",
+  "raw_payload": "{\"keyId\":\"mrk-abc123\",\"encryptionAlgorithm\":\"SYMMETRIC_DEFAULT\"}"
+}

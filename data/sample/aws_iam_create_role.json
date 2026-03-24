@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-001",
+  "event_name": "CreateRole",
+  "actor": "arn:aws:iam::123456789012:user/deploy-bot",
+  "source_ip": "198.51.100.42",
+  "resource": "arn:aws:iam::123456789012:role/ecs-task-execution",
+  "event_time_epoch": 1711036800,
+  "severity": "medium",
+  "service": "iam.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "terraform/1.7.0",
+  "raw_payload": "{\"roleName\":\"ecs-task-execution\",\"assumeRolePolicyDocument\":\"{\\\"Version\\\":\\\"2012-10-17\\\"}\"}"
+}

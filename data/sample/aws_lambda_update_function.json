@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-004",
+  "event_name": "UpdateFunctionCode",
+  "actor": "arn:aws:iam::123456789012:role/github-actions-deploy",
+  "source_ip": "140.82.112.22",
+  "resource": "arn:aws:lambda:us-east-1:123456789012:function:payment-processor",
+  "event_time_epoch": 1711047600,
+  "severity": "low",
+  "service": "lambda.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "aws-sdk-js/3.490.0",
+  "raw_payload": "{\"functionName\":\"payment-processor\",\"runtime\":\"provided.al2023\",\"architectures\":[\"arm64\"]}"
+}

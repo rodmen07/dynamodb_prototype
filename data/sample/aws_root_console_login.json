@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-011",
+  "event_name": "ConsoleLogin",
+  "actor": "arn:aws:iam::123456789012:root",
+  "source_ip": "85.214.132.117",
+  "resource": "arn:aws:iam::123456789012:root",
+  "event_time_epoch": 1711072800,
+  "severity": "critical",
+  "service": "signin.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+  "raw_payload": "{\"eventType\":\"AwsConsoleSignIn\",\"responseElements\":{\"ConsoleLogin\":\"Success\"},\"additionalEventData\":{\"MFAUsed\":\"No\"}}"
+}

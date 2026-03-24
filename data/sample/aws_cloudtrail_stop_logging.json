@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-008",
+  "event_name": "StopLogging",
+  "actor": "arn:aws:iam::123456789012:user/unknown-actor",
+  "source_ip": "45.33.32.156",
+  "resource": "arn:aws:cloudtrail:us-east-1:123456789012:trail/org-audit-trail",
+  "event_time_epoch": 1711062000,
+  "severity": "critical",
+  "service": "cloudtrail.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "aws-cli/2.15.0",
+  "raw_payload": "{\"trailName\":\"org-audit-trail\",\"trailARN\":\"arn:aws:cloudtrail:us-east-1:123456789012:trail/org-audit-trail\"}"
+}

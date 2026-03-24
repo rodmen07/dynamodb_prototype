@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-014",
+  "event_name": "UnauthorizedAccess:EC2/SSHBruteForce",
+  "actor": "external",
+  "source_ip": "185.220.101.34",
+  "resource": "arn:aws:ec2:us-east-1:123456789012:instance/i-0abc123def456789",
+  "event_time_epoch": 1711119600,
+  "severity": "critical",
+  "service": "guardduty.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "guardduty-detector",
+  "raw_payload": "{\"detectorId\":\"abc123\",\"type\":\"UnauthorizedAccess:EC2/SSHBruteForce\",\"severity\":8.0,\"resource\":{\"instanceDetails\":{\"instanceId\":\"i-0abc123def456789\",\"instanceType\":\"t3.medium\"}},\"service\":{\"count\":847}}"
+}

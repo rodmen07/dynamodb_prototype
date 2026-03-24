@@ -1,0 +1,14 @@
+{
+  "provider": "aws",
+  "event_id": "evt-aws-010",
+  "event_name": "AttachRolePolicy",
+  "actor": "arn:aws:iam::123456789012:user/admin",
+  "source_ip": "203.0.113.10",
+  "resource": "arn:aws:iam::123456789012:role/dev-engineer-role",
+  "event_time_epoch": 1711069200,
+  "severity": "high",
+  "service": "iam.amazonaws.com",
+  "region": "us-east-1",
+  "user_agent": "console.amazonaws.com",
+  "raw_payload": "{\"roleName\":\"dev-engineer-role\",\"policyArn\":\"arn:aws:iam::aws:policy/AdministratorAccess\"}"
+}
