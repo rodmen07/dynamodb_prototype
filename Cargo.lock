@@ -154,9 +154,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-costexplorer"
-version = "1.112.0"
+version = "1.113.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "112b318529edfcc6cda145f7dd67e7abdbbe8e94964e6ef4faaadd0e61d2a267"
+checksum = "1cedb42756f72c480d84f0c821bf9a52c4221811056fc7be4fab8e81314fa38e"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
