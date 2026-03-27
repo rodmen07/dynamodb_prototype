@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Client Portal</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .status.empty{background:#f0fdf4;color:#166534}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:12px}
+    /* Project grid */
+    .projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+    .project-card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;overflow:hidden;cursor:pointer;transition:box-shadow .15s}
+    .project-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
+    .project-card.expanded{box-shadow:0 4px 16px rgba(0,0,0,.12)}
+    .card-header{padding:16px 18px 12px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+    .card-title{font-weight:700;font-size:1rem;margin:0 0 4px}
+    .card-meta{font-size:.8rem;color:#888}
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.72rem;font-weight:600;white-space:nowrap}
+    .badge-planning{background:#e0f2fe;color:#0369a1}
+    .badge-active{background:#dcfce7;color:#15803d}
+    .badge-paused{background:#fef3c7;color:#92400e}
+    .badge-completed{background:#f3f4f6;color:#374151}
+    .badge-cancelled{background:#fee2e2;color:#b91c1c}
+    /* Expanded detail */
+    .card-body{display:none;border-top:1px solid #eee;padding:0 18px 18px}
+    .card-body.open{display:block}
+    .section-label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:14px 0 6px;font-weight:600}
+    /* Milestones */
+    .milestone{margin-bottom:10px}
+    .milestone-header{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;font-weight:600;margin-bottom:4px}
+    .milestone-due{font-size:.75rem;color:#888;font-weight:400}
+    .progress-track{background:#e5e7eb;border-radius:9999px;height:6px;overflow:hidden}
+    .progress-fill{background:#2563eb;height:6px;border-radius:9999px;transition:width .3s}
+    .deliverables{margin-top:6px;padding-left:12px}
+    .deliverable{display:flex;align-items:center;gap:6px;font-size:.8rem;padding:2px 0;color:#444}
+    .deliverable .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .dot-done{background:#15803d}
+    .dot-pending{background:#d1d5db}
+    .dot-inprogress{background:#2563eb}
+    /* Messages */
+    .messages{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    .msg{padding:7px 10px;border-radius:6px;font-size:.82rem;line-height:1.4}
+    .msg.admin{background:#eef2ff;color:#3730a3;align-self:flex-end;max-width:85%}
+    .msg.client{background:#f3f4f6;color:#1a1a2e;align-self:flex-start;max-width:85%}
+    .msg-meta{font-size:.7rem;color:#aaa;margin-top:2px}
+    .msg-form{display:flex;gap:6px;margin-top:4px}
+    .msg-form input{flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:.85rem}
+    .msg-form button{padding:6px 14px;background:#1a1a2e;color:#fff;border:none;border-radius:6px;font-size:.85rem;cursor:pointer}
+    .msg-form button:hover{background:#2d2d4e}
+    .chevron{font-size:.75rem;color:#aaa;transition:transform .2s;margin-top:2px}
+    .project-card.expanded .chevron{transform:rotate(180deg)}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('portal'); DashAuth.guardAdminPage();</script>
+  <h1>Client Portal</h1>
+  <p class="sub">All client projects — milestones, deliverables, and messages.</p>
+  <div class="refresh" id="refresh-note"></div>
+  <div id="status-msg" class="status loading">Loading projects…</div>
+  <div id="projects-grid" class="projects" style="display:none"></div>
+
+  <script>
+    const statusEl = document.getElementById('status-msg');
+    const grid = document.getElementById('projects-grid');
+
+    function statusBadgeClass(s) {
+      return 'badge badge-' + (s || 'planning').toLowerCase().replace(/\s+/g, '-');
+    }
+
+    function fmt(dt) {
+      if (!dt) return '—';
+      try { return new Date(dt).toLocaleDateString(); } catch { return dt; }
+    }
+
+    function deliverableDot(status) {
+      if (status === 'done' || status === 'completed') return 'dot-done';
+      if (status === 'in_progress') return 'dot-inprogress';
+      return 'dot-pending';
+    }
+
+    function deliverableProgress(deliverables) {
+      if (!deliverables || !deliverables.length) return 0;
+      const done = deliverables.filter(d => d.status === 'done' || d.status === 'completed').length;
+      return Math.round((done / deliverables.length) * 100);
+    }
+
+    async function loadMilestones(projectId, container) {
+      container.innerHTML = '<p style="color:#aaa;font-size:.8rem;margin:6px 0">Loading milestones…</p>';
+      try {
+        const [msRes, projMsgs] = await Promise.all([
+          DashAuth.authFetch('/api/portal/projects/' + projectId + '/milestones').then(r => r.ok ? r.json() : []),
+          DashAuth.authFetch('/api/portal/projects/' + projectId + '/messages').then(r => r.ok ? r.json() : []),
+        ]);
+        const milestones = Array.isArray(msRes) ? msRes : [];
+        renderMilestones(milestones, container, projectId);
+        renderMessages(projMsgs, container, projectId);
+      } catch (e) {
+        container.innerHTML = '<p style="color:#b91c1c;font-size:.8rem">Failed to load: ' + e.message + '</p>';
+      }
+    }
+
+    async function loadDeliverables(milestoneId) {
+      try {
+        const res = await DashAuth.authFetch('/api/portal/milestones/' + milestoneId + '/deliverables');
+        return res.ok ? await res.json() : [];
+      } catch { return []; }
+    }
+
+    function renderMilestones(milestones, container, projectId) {
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = 'Milestones';
+      container.appendChild(label);
+
+      if (!milestones.length) {
+        const p = document.createElement('p');
+        p.style.cssText = 'color:#aaa;font-size:.8rem;margin:4px 0';
+        p.textContent = 'No milestones yet.';
+        container.appendChild(p);
+        return;
+      }
+
+      milestones.forEach(ms => {
+        const wrap = document.createElement('div');
+        wrap.className = 'milestone';
+
+        const hdr = document.createElement('div');
+        hdr.className = 'milestone-header';
+        hdr.innerHTML =
+          '<span>' + (ms.name || '—') + '</span>' +
+          '<span class="milestone-due">' + fmt(ms.due_date) + '</span>';
+        wrap.appendChild(hdr);
+
+        const track = document.createElement('div');
+        track.className = 'progress-track';
+        const fill = document.createElement('div');
+        fill.className = 'progress-fill';
+        fill.style.width = '0%';
+        track.appendChild(fill);
+        wrap.appendChild(track);
+
+        const dlList = document.createElement('div');
+        dlList.className = 'deliverables';
+        dlList.innerHTML = '<span style="color:#aaa;font-size:.75rem">Loading deliverables…</span>';
+        wrap.appendChild(dlList);
+
+        container.appendChild(wrap);
+
+        // Load deliverables async and update progress
+        loadDeliverables(ms.id).then(deliverables => {
+          dlList.innerHTML = '';
+          if (!deliverables.length) {
+            dlList.innerHTML = '<span style="color:#ccc;font-size:.75rem">No deliverables</span>';
+            return;
+          }
+          fill.style.width = deliverableProgress(deliverables) + '%';
+          deliverables.forEach(d => {
+            const item = document.createElement('div');
+            item.className = 'deliverable';
+            item.innerHTML =
+              '<span class="dot ' + deliverableDot(d.status) + '"></span>' +
+              '<span>' + (d.name || '—') + '</span>';
+            dlList.appendChild(item);
+          });
+        });
+      });
+    }
+
+    function renderMessages(messages, container, projectId) {
+      const label = document.createElement('div');
+      label.className = 'section-label';
+      label.textContent = 'Messages';
+      container.appendChild(label);
+
+      const msgList = document.createElement('div');
+      msgList.className = 'messages';
+      msgList.id = 'msgs-' + projectId;
+
+      const msgs = Array.isArray(messages) ? messages : [];
+      if (!msgs.length) {
+        msgList.innerHTML = '<p style="color:#aaa;font-size:.8rem;margin:4px 0">No messages yet.</p>';
+      } else {
+        msgs.slice(-20).forEach(m => {
+          const el = document.createElement('div');
+          el.className = 'msg ' + (m.author_role === 'admin' ? 'admin' : 'client');
+          el.innerHTML =
+            '<div>' + (m.body || '') + '</div>' +
+            '<div class="msg-meta">' + (m.author_role || '') + ' · ' + fmt(m.created_at) + '</div>';
+          msgList.appendChild(el);
+        });
+      }
+      container.appendChild(msgList);
+
+      const form = document.createElement('div');
+      form.className = 'msg-form';
+      form.innerHTML =
+        '<input id="msg-input-' + projectId + '" placeholder="Send a message…" />' +
+        '<button onclick="sendMessage(\'' + projectId + '\')">Send</button>';
+      container.appendChild(form);
+    }
+
+    async function sendMessage(projectId) {
+      const input = document.getElementById('msg-input-' + projectId);
+      const body = (input && input.value || '').trim();
+      if (!body) return;
+      input.value = '';
+      try {
+        const res = await DashAuth.authFetch('/api/portal/projects/' + projectId + '/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body }),
+        });
+        if (res.ok) {
+          const msg = await res.json();
+          const list = document.getElementById('msgs-' + projectId);
+          if (list) {
+            const el = document.createElement('div');
+            el.className = 'msg admin';
+            el.innerHTML =
+              '<div>' + msg.body + '</div>' +
+              '<div class="msg-meta">admin · just now</div>';
+            list.appendChild(el);
+            list.scrollTop = list.scrollHeight;
+          }
+        }
+      } catch (e) { console.warn('send failed', e); }
+    }
+
+    async function load() {
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading projects…';
+      statusEl.style.display = '';
+      grid.style.display = 'none';
+      grid.innerHTML = '';
+
+      try {
+        const res = await DashAuth.authFetch('/api/portal/projects');
+        if (!res.ok) throw new Error('API error ' + res.status);
+        const projects = await res.json();
+        const list = Array.isArray(projects) ? projects : (projects.data || []);
+
+        if (!list.length) {
+          statusEl.className = 'status empty';
+          statusEl.textContent = 'No projects found.';
+          return;
+        }
+
+        list.forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'project-card';
+          card.id = 'card-' + p.id;
+
+          const badge = document.createElement('span');
+          badge.className = statusBadgeClass(p.status);
+          badge.textContent = p.status || 'planning';
+
+          const hdr = document.createElement('div');
+          hdr.className = 'card-header';
+          hdr.innerHTML =
+            '<div>' +
+              '<div class="card-title">' + (p.name || '—') + '</div>' +
+              '<div class="card-meta">' +
+                (p.account_id ? 'Account: ' + p.account_id + '  ' : '') +
+                (p.start_date ? 'Start: ' + fmt(p.start_date) : '') +
+                (p.target_end_date ? '  End: ' + fmt(p.target_end_date) : '') +
+              '</div>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"></div>';
+          hdr.querySelector('div:last-child').appendChild(badge);
+          const chevron = document.createElement('div');
+          chevron.className = 'chevron';
+          chevron.textContent = '▼';
+          hdr.querySelector('div:last-child').appendChild(chevron);
+          card.appendChild(hdr);
+
+          const body = document.createElement('div');
+          body.className = 'card-body';
+          card.appendChild(body);
+
+          hdr.addEventListener('click', () => {
+            const isOpen = body.classList.contains('open');
+            if (!isOpen) {
+              body.classList.add('open');
+              card.classList.add('expanded');
+              if (!body.dataset.loaded) {
+                body.dataset.loaded = '1';
+                loadMilestones(p.id, body);
+              }
+            } else {
+              body.classList.remove('open');
+              card.classList.remove('expanded');
+            }
+          });
+
+          grid.appendChild(card);
+        });
+
+        statusEl.style.display = 'none';
+        grid.style.display = '';
+      } catch (e) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Error loading projects: ' + e.message;
+      }
+    }
+
+    load();
+    document.getElementById('refresh-note').textContent = '';
+    setInterval(() => {
+      document.getElementById('refresh-note').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }, 1000);
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

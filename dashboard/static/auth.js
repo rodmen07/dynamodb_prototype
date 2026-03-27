@@ -4,11 +4,15 @@
 
   var ALL_TABS = [
     { key: 'overview',       label: 'Overview',       href: '/overview',       admin: true  },
+    { key: 'gold',           label: 'Gold',           href: '/gold',           admin: false },
+    { key: 'silver',         label: 'Silver',         href: '/silver',         admin: false },
+    { key: 'bronze',         label: 'Bronze',         href: '/bronze',         admin: false },
     { key: 'builds',         label: 'Builds',         href: '/builds',         admin: false },
     { key: 'infrastructure', label: 'Infrastructure', href: '/infrastructure', admin: true  },
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
     { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
     { key: 'ai-logs',        label: 'AI Logs',        href: '/ai-logs',        admin: true  },
+    { key: 'portal',         label: 'Portal',         href: '/portal',         admin: true  },
     { key: 'search',         label: 'Search',         href: 'https://rodmen07.github.io/frontend-service/#/search', admin: false, target: '_blank' },
     { key: 'reports',        label: 'Reports',        href: 'https://rodmen07.github.io/frontend-service/#/crm/reports', admin: false, target: '_blank' },
     { key: 'observaboard',   label: 'Observaboard',   href: 'https://rodmen07.github.io/observaboard/', admin: false, target: '_blank' },
