@@ -83,7 +83,7 @@
           headers: { 'Authorization': 'Bearer ' + token }
         });
         if (r.status === 401) {
-          sessionStorage.removeItem(JWT_SESSION);
+          sessionStorage.removeItem('dashboard_jwt');
           showLoginPrompt(true);
           return;
         }
