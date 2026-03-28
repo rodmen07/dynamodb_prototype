@@ -123,6 +123,39 @@ fn require_admin(headers: &HeaderMap) -> Result<(), StatusCode> {
     Err(StatusCode::UNAUTHORIZED)
 }
 
+/// Like require_admin but also accepts JWTs carrying the "client" role.
+/// Used by the portal proxy so that client users can access their own projects.
+fn require_admin_or_client(headers: &HeaderMap) -> Result<(), StatusCode> {
+    let admin_key = std::env::var("DASHBOARD_ADMIN_KEY")
+        .expect("DASHBOARD_ADMIN_KEY must be set");
+
+    if let Some(k) = headers.get("X-Admin-Key").and_then(|v| v.to_str().ok()) {
+        if k == admin_key {
+            return Ok(());
+        }
+    }
+
+    let jwt_secret = std::env::var("AUTH_JWT_SECRET").unwrap_or_default();
+    if !jwt_secret.is_empty() {
+        if let Some(bearer) = headers
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+        {
+            let key = DecodingKey::from_secret(jwt_secret.as_bytes());
+            let mut validation = Validation::new(Algorithm::HS256);
+            validation.validate_exp = true;
+            if let Ok(data) = decode::<DashClaims>(bearer, &key, &validation) {
+                if data.claims.roles.iter().any(|r| r == "admin" || r == "client") {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
+}
+
 // ---------------------------------------------------------------------------
 // Existing helpers
 // ---------------------------------------------------------------------------
@@ -1052,7 +1085,7 @@ async fn handler_portal_projects(
     State(s): State<DashState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let url = format!("{}/api/v1/projects", projects_api_url().trim_end_matches('/'));
     proxy_get(&s.http, &url, auth).await
@@ -1063,7 +1096,7 @@ async fn handler_portal_milestones(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let url = format!(
         "{}/api/v1/projects/{id}/milestones",
@@ -1077,7 +1110,7 @@ async fn handler_portal_deliverables(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let url = format!(
         "{}/api/v1/milestones/{id}/deliverables",
@@ -1091,7 +1124,7 @@ async fn handler_portal_messages(
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let url = format!(
         "{}/api/v1/projects/{id}/messages",
@@ -1106,7 +1139,7 @@ async fn handler_portal_send_message(
     Path(id): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let base = projects_api_url();
     let url = format!(

@@ -12,7 +12,7 @@
     { key: 'spend',          label: 'Spend',          href: '/spend',          admin: true  },
     { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
     { key: 'ai-logs',        label: 'AI Logs',        href: '/ai-logs',        admin: true  },
-    { key: 'portal',         label: 'Portal',         href: '/portal',         admin: true  },
+    { key: 'portal',         label: 'Portal',         href: '/portal',         admin: true, clientOk: true },
     { key: 'search',         label: 'Search',         href: 'https://rodmen07.github.io/frontend-service/#/search', admin: false, target: '_blank' },
     { key: 'reports',        label: 'Reports',        href: 'https://rodmen07.github.io/frontend-service/#/crm/reports', admin: false, target: '_blank' },
     { key: 'observaboard',   label: 'Observaboard',   href: 'https://rodmen07.github.io/observaboard/', admin: false, target: '_blank' },
@@ -41,12 +41,25 @@
     } catch (_) { return false; }
   }
 
+  function isClient() {
+    var token = getToken();
+    if (!token) return false;
+    try {
+      var parts = token.split('.');
+      if (parts.length !== 3) return false;
+      var payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload.exp && Date.now() / 1000 > payload.exp) return false;
+      return Array.isArray(payload.roles) && payload.roles.includes('client');
+    } catch (_) { return false; }
+  }
+
   function renderNav(activeKey) {
     var navEl = document.getElementById('main-nav');
     if (!navEl) return;
     var admin = isAdmin();
+    var client = isClient();
     navEl.innerHTML = ALL_TABS
-      .filter(function (t) { return admin || !t.admin; })
+      .filter(function (t) { return !t.admin || admin || (client && t.clientOk); })
       .map(function (t) {
         var target = t.target ? ' target="' + t.target + '" rel="noopener noreferrer"' : '';
         return '<a href="' + t.href + '"' + target + (t.key === activeKey ? ' class="active"' : '') + '>' + t.label + '</a>';
@@ -72,6 +85,28 @@
     document.body.appendChild(gate);
   }
 
+  var PORTAL_GITHUB_URL = 'https://auth-service-rodmen07-v2.fly.dev/user/oauth/github?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
+  var PORTAL_GOOGLE_URL = 'https://auth-service-rodmen07-v2.fly.dev/user/oauth/google?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
+
+  function guardPortalPage() {
+    if (isAdmin() || isClient()) return;
+    Array.from(document.body.children).forEach(function (el) {
+      if (el.id !== 'main-nav' && el.tagName.toLowerCase() !== 'nav') {
+        el.style.display = 'none';
+      }
+    });
+    var gate = document.createElement('div');
+    gate.style.cssText = 'background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px 24px;max-width:440px;margin-top:8px';
+    gate.innerHTML =
+      '<p style="margin:0 0 8px;font-size:.9rem;font-weight:600;color:#0c4a6e">Client Portal</p>' +
+      '<p style="margin:0 0 16px;font-size:.85rem;color:#075985;line-height:1.5">Sign in to view your projects, milestones, and messages.</p>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<a href="' + PORTAL_GITHUB_URL + '" style="display:inline-block;padding:7px 18px;background:#1a1a2e;color:#fff;border-radius:6px;font-size:.875rem;text-decoration:none;font-weight:600">Sign in with GitHub \u2192</a>' +
+        '<a href="' + PORTAL_GOOGLE_URL + '" style="display:inline-block;padding:7px 18px;background:#4285f4;color:#fff;border-radius:6px;font-size:.875rem;text-decoration:none;font-weight:600">Sign in with Google \u2192</a>' +
+      '</div>';
+    document.body.appendChild(gate);
+  }
+
   /** fetch() wrapper that injects Authorization: Bearer <token> when a token is present. */
   function authFetch(url, opts) {
     var token = getToken();
@@ -82,5 +117,5 @@
     return fetch(url, options);
   }
 
-  window.DashAuth = { getToken: getToken, isAdmin: isAdmin, renderNav: renderNav, guardAdminPage: guardAdminPage, authFetch: authFetch };
+  window.DashAuth = { getToken: getToken, isAdmin: isAdmin, isClient: isClient, renderNav: renderNav, guardAdminPage: guardAdminPage, guardPortalPage: guardPortalPage, authFetch: authFetch };
 }());
