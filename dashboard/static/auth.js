@@ -13,6 +13,7 @@
     { key: 'messages',       label: 'Messages',       href: '/messages',       admin: true  },
     { key: 'ai-logs',        label: 'AI Logs',        href: '/ai-logs',        admin: true  },
     { key: 'portal',         label: 'Portal',         href: '/portal',         admin: true, clientOk: true },
+    { key: 'provision',      label: 'Provision',      href: '/provision',      admin: true  },
     { key: 'search',         label: 'Search',         href: 'https://rodmen07.github.io/frontend-service/#/search', admin: false, target: '_blank' },
     { key: 'reports',        label: 'Reports',        href: 'https://rodmen07.github.io/frontend-service/#/crm/reports', admin: false, target: '_blank' },
     { key: 'observaboard',   label: 'Observaboard',   href: 'https://rodmen07.github.io/observaboard/', admin: false, target: '_blank' },

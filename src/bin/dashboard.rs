@@ -1169,6 +1169,76 @@ async fn handler_portal_send_message(
     }
 }
 
+async fn proxy_post(
+    http: &reqwest::Client,
+    url: &str,
+    auth: Option<&str>,
+    body: Value,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let mut req = http.post(url).json(&body);
+    if let Some(a) = auth {
+        req = req.header("Authorization", a);
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    let status = resp.status();
+    let resp_body: Value = resp
+        .json()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    if status.is_success() {
+        Ok(Json(resp_body))
+    } else {
+        Err((
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            resp_body.to_string(),
+        ))
+    }
+}
+
+async fn handler_provision_create_project(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!("{}/api/v1/projects", projects_api_url().trim_end_matches('/'));
+    proxy_post(&s.http, &url, auth, body).await
+}
+
+async fn handler_provision_create_milestone(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/projects/{id}/milestones",
+        projects_api_url().trim_end_matches('/')
+    );
+    proxy_post(&s.http, &url, auth, body).await
+}
+
+async fn handler_provision_create_deliverable(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/milestones/{id}/deliverables",
+        projects_api_url().trim_end_matches('/')
+    );
+    proxy_post(&s.http, &url, auth, body).await
+}
+
 // ---------------------------------------------------------------------------
 // AWS Cost Explorer spend (admin-only)
 // ---------------------------------------------------------------------------
@@ -1326,6 +1396,10 @@ async fn portal_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/portal.html"))
 }
 
+async fn provision_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/provision.html"))
+}
+
 async fn overview_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/overview.html"))
 }
@@ -1419,6 +1493,7 @@ async fn main() {
         .route("/messages", get(messages_html))
         .route("/ai-logs", get(ai_logs_html))
         .route("/portal", get(portal_html))
+        .route("/provision", get(provision_html))
         .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
@@ -1436,6 +1511,9 @@ async fn main() {
         .route("/api/portal/projects/{id}/milestones", get(handler_portal_milestones))
         .route("/api/portal/projects/{id}/messages", get(handler_portal_messages).post(handler_portal_send_message))
         .route("/api/portal/milestones/{id}/deliverables", get(handler_portal_deliverables))
+        .route("/api/provision/projects", post(handler_provision_create_project))
+        .route("/api/provision/projects/{id}/milestones", post(handler_provision_create_milestone))
+        .route("/api/provision/milestones/{id}/deliverables", post(handler_provision_create_deliverable))
         .route("/ingest", post(handler_ingest))
         .route("/promote", post(handler_promote))
         .with_state(state)

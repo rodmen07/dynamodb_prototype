@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Provision Client Project</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 24px;font-size:.9rem}
+    .card{background:#fff;border:1px solid #e0e0e0;border-radius:10px;padding:24px;max-width:640px;margin-bottom:20px}
+    .card h2{margin:0 0 16px;font-size:1rem;font-weight:700}
+    .field{margin-bottom:14px}
+    label{display:block;font-size:.8rem;font-weight:600;color:#555;margin-bottom:4px}
+    input,select,textarea{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:.875rem;font-family:inherit;background:#fff}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:#1a1a2e}
+    textarea{resize:vertical;min-height:60px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{padding:8px 20px;border:none;border-radius:6px;font-size:.875rem;font-weight:600;cursor:pointer}
+    .btn-primary{background:#1a1a2e;color:#fff}
+    .btn-primary:hover{background:#2d2d4e}
+    .btn-secondary{background:#f3f4f6;color:#374151;border:1px solid #ddd}
+    .btn-secondary:hover{background:#e5e7eb}
+    .btn-danger{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+    .btn-danger:hover{background:#fecaca}
+    .btn-sm{padding:5px 12px;font-size:.8rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.875rem;display:none}
+    .status.success{display:block;background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+    .status.error{display:block;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .status.loading{display:block;background:#eef2ff;color:#3730a3}
+    /* Milestones */
+    .milestone-list{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+    .milestone-item{border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;background:#fafafa}
+    .milestone-item .milestone-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .milestone-item .milestone-head span{font-size:.8rem;font-weight:600;color:#555}
+    .deliverable-list{margin-top:8px;display:flex;flex-direction:column;gap:6px;padding-left:8px}
+    .deliverable-item{display:flex;align-items:center;gap:8px}
+    .deliverable-item input{flex:1}
+    .add-link{font-size:.8rem;color:#2563eb;cursor:pointer;border:none;background:none;padding:4px 0;margin-top:4px}
+    .add-link:hover{text-decoration:underline}
+    /* Projects list */
+    .projects-table{width:100%;border-collapse:collapse;font-size:.85rem}
+    .projects-table th{text-align:left;padding:8px 10px;border-bottom:2px solid #e5e7eb;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:#888}
+    .projects-table td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+    .projects-table tr:last-child td{border-bottom:none}
+    .badge{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:.72rem;font-weight:600}
+    .badge-planning{background:#e0f2fe;color:#0369a1}
+    .badge-active{background:#dcfce7;color:#15803d}
+    .badge-paused{background:#fef3c7;color:#92400e}
+    .badge-completed{background:#f3f4f6;color:#374151}
+    .badge-cancelled{background:#fee2e2;color:#b91c1c}
+    .client-id{font-family:monospace;font-size:.78rem;color:#555;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('provision'); DashAuth.guardAdminPage();</script>
+
+  <h1>Provision Client Project</h1>
+  <p class="sub">Create projects and assign them to client users.</p>
+
+  <!-- Status -->
+  <div id="status" class="status"></div>
+
+  <!-- Create Project Form -->
+  <div class="card">
+    <h2>New Project</h2>
+    <div class="field">
+      <label>Project Name *</label>
+      <input id="f-name" type="text" placeholder="e.g. Website Redesign" />
+    </div>
+    <div class="field">
+      <label>Account ID *</label>
+      <input id="f-account-id" type="text" placeholder="UUID from accounts-service" />
+    </div>
+    <div class="field">
+      <label>Client User ID <span style="font-weight:400;color:#aaa">(OAuth subject — links project to a client)</span></label>
+      <input id="f-client-user-id" type="text" placeholder="e.g. 12345678 (GitHub user ID)" />
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <textarea id="f-description" placeholder="Optional project description"></textarea>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Status</label>
+        <select id="f-status">
+          <option value="planning">Planning</option>
+          <option value="active">Active</option>
+          <option value="paused">Paused</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="field" style="margin-bottom:0"></div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Start Date</label>
+        <input id="f-start-date" type="date" />
+      </div>
+      <div class="field">
+        <label>Target End Date</label>
+        <input id="f-end-date" type="date" />
+      </div>
+    </div>
+
+    <!-- Milestones -->
+    <div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="margin:0;font-size:.8rem;font-weight:600;color:#555">Milestones <span style="font-weight:400;color:#aaa">(optional — add after creating project)</span></label>
+        <button class="btn btn-secondary btn-sm" onclick="addMilestone()">+ Add Milestone</button>
+      </div>
+      <div id="milestone-list" class="milestone-list"></div>
+    </div>
+
+    <div style="margin-top:20px;display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="createProject()">Create Project</button>
+      <button class="btn btn-secondary" onclick="resetForm()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Existing Projects -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0">All Projects</h2>
+      <button class="btn btn-secondary btn-sm" onclick="loadProjects()">Refresh</button>
+    </div>
+    <div id="projects-table-wrap">
+      <p style="color:#aaa;font-size:.85rem">Loading…</p>
+    </div>
+  </div>
+
+  <script>
+    var milestoneCount = 0;
+
+    function showStatus(msg, type) {
+      var el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = 'status ' + type;
+      if (type === 'success') setTimeout(function() { el.className = 'status'; }, 4000);
+    }
+
+    function addMilestone() {
+      var idx = milestoneCount++;
+      var list = document.getElementById('milestone-list');
+      var item = document.createElement('div');
+      item.className = 'milestone-item';
+      item.id = 'ms-' + idx;
+      item.innerHTML =
+        '<div class="milestone-head">' +
+          '<span>Milestone ' + (idx + 1) + '</span>' +
+          '<button class="btn btn-danger btn-sm" onclick="removeMilestone(' + idx + ')">Remove</button>' +
+        '</div>' +
+        '<div class="row">' +
+          '<div class="field"><label>Name *</label><input id="ms-name-' + idx + '" type="text" placeholder="e.g. Discovery Phase" /></div>' +
+          '<div class="field"><label>Due Date</label><input id="ms-due-' + idx + '" type="date" /></div>' +
+        '</div>' +
+        '<div class="deliverable-list" id="dl-list-' + idx + '"></div>' +
+        '<button class="add-link" onclick="addDeliverable(' + idx + ')">+ Add deliverable</button>';
+      list.appendChild(item);
+    }
+
+    function removeMilestone(idx) {
+      var el = document.getElementById('ms-' + idx);
+      if (el) el.remove();
+    }
+
+    var deliverableCounts = {};
+    function addDeliverable(msIdx) {
+      if (!deliverableCounts[msIdx]) deliverableCounts[msIdx] = 0;
+      var dIdx = deliverableCounts[msIdx]++;
+      var list = document.getElementById('dl-list-' + msIdx);
+      var item = document.createElement('div');
+      item.className = 'deliverable-item';
+      item.id = 'dl-' + msIdx + '-' + dIdx;
+      item.innerHTML =
+        '<input id="dl-name-' + msIdx + '-' + dIdx + '" type="text" placeholder="Deliverable name" />' +
+        '<select id="dl-status-' + msIdx + '-' + dIdx + '" style="width:120px">' +
+          '<option value="pending">Pending</option>' +
+          '<option value="in_progress">In Progress</option>' +
+          '<option value="done">Done</option>' +
+        '</select>' +
+        '<button class="btn btn-danger btn-sm" onclick="this.parentElement.remove()">✕</button>';
+      list.appendChild(item);
+    }
+
+    function collectMilestones() {
+      var milestones = [];
+      document.querySelectorAll('.milestone-item').forEach(function(item) {
+        var idx = item.id.replace('ms-', '');
+        var name = (document.getElementById('ms-name-' + idx) || {}).value || '';
+        if (!name.trim()) return;
+        var due = (document.getElementById('ms-due-' + idx) || {}).value || '';
+        var deliverables = [];
+        item.querySelectorAll('.deliverable-item').forEach(function(di) {
+          var diId = di.id.replace('dl-', '');
+          var parts = diId.split('-');
+          var msI = parts[0], dI = parts[1];
+          var dName = (document.getElementById('dl-name-' + msI + '-' + dI) || {}).value || '';
+          var dStatus = (document.getElementById('dl-status-' + msI + '-' + dI) || {}).value || 'pending';
+          if (dName.trim()) deliverables.push({ name: dName.trim(), status: dStatus });
+        });
+        milestones.push({ name: name.trim(), due_date: due || null, deliverables: deliverables });
+      });
+      return milestones;
+    }
+
+    async function createProject() {
+      var name = document.getElementById('f-name').value.trim();
+      var accountId = document.getElementById('f-account-id').value.trim();
+      if (!name) { showStatus('Project name is required.', 'error'); return; }
+      if (!accountId) { showStatus('Account ID is required.', 'error'); return; }
+
+      var payload = {
+        name: name,
+        account_id: accountId,
+        client_user_id: document.getElementById('f-client-user-id').value.trim() || null,
+        description: document.getElementById('f-description').value.trim() || null,
+        status: document.getElementById('f-status').value,
+        start_date: document.getElementById('f-start-date').value || null,
+        target_end_date: document.getElementById('f-end-date').value || null,
+      };
+
+      showStatus('Creating project…', 'loading');
+
+      var res = await DashAuth.authFetch('/api/provision/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        showStatus('Failed to create project: ' + (err.message || res.status), 'error');
+        return;
+      }
+
+      var project = await res.json();
+      var milestones = collectMilestones();
+
+      // Create milestones sequentially
+      for (var i = 0; i < milestones.length; i++) {
+        var ms = milestones[i];
+        var msPayload = { name: ms.name, due_date: ms.due_date };
+        var msRes = await DashAuth.authFetch('/api/provision/projects/' + project.id + '/milestones', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(msPayload),
+        });
+        if (msRes.ok && ms.deliverables.length) {
+          var milestone = await msRes.json();
+          for (var j = 0; j < ms.deliverables.length; j++) {
+            await DashAuth.authFetch('/api/provision/milestones/' + milestone.id + '/deliverables', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(ms.deliverables[j]),
+            });
+          }
+        }
+      }
+
+      showStatus('Project "' + project.name + '" created successfully (ID: ' + project.id + ').', 'success');
+      resetForm();
+      loadProjects();
+    }
+
+    function resetForm() {
+      ['f-name','f-account-id','f-client-user-id','f-description','f-start-date','f-end-date'].forEach(function(id) {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('f-status').value = 'planning';
+      document.getElementById('milestone-list').innerHTML = '';
+      milestoneCount = 0;
+      deliverableCounts = {};
+    }
+
+    function badgeClass(s) {
+      return 'badge badge-' + (s || 'planning').toLowerCase();
+    }
+
+    async function loadProjects() {
+      var wrap = document.getElementById('projects-table-wrap');
+      wrap.innerHTML = '<p style="color:#aaa;font-size:.85rem">Loading…</p>';
+      try {
+        var res = await DashAuth.authFetch('/api/portal/projects');
+        if (!res.ok) throw new Error('API error ' + res.status);
+        var projects = await res.json();
+        var list = Array.isArray(projects) ? projects : (projects.data || []);
+        if (!list.length) {
+          wrap.innerHTML = '<p style="color:#aaa;font-size:.85rem">No projects yet.</p>';
+          return;
+        }
+        var html = '<table class="projects-table"><thead><tr>' +
+          '<th>Name</th><th>Status</th><th>Account ID</th><th>Client User ID</th><th>Dates</th>' +
+          '</tr></thead><tbody>';
+        list.forEach(function(p) {
+          var start = p.start_date ? p.start_date.slice(0,10) : '—';
+          var end = p.target_end_date ? p.target_end_date.slice(0,10) : '—';
+          html +=
+            '<tr>' +
+              '<td><strong>' + (p.name || '—') + '</strong><br><span style="font-family:monospace;font-size:.72rem;color:#aaa">' + p.id + '</span></td>' +
+              '<td><span class="' + badgeClass(p.status) + '">' + (p.status || 'planning') + '</span></td>' +
+              '<td class="client-id">' + (p.account_id || '—') + '</td>' +
+              '<td class="client-id">' + (p.client_user_id || '<span style="color:#ccc">unassigned</span>') + '</td>' +
+              '<td style="font-size:.78rem;white-space:nowrap">' + start + ' → ' + end + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+      } catch (e) {
+        wrap.innerHTML = '<p style="color:#b91c1c;font-size:.85rem">Error: ' + e.message + '</p>';
+      }
+    }
+
+    loadProjects();
+  </script>
+</body>
+</html>
