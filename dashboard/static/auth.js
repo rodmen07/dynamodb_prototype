@@ -1,6 +1,6 @@
 (function () {
   var JWT_SESSION = 'dashboard_jwt';
-  var AUTH_URL = 'https://auth-service-rodmen07-v2.fly.dev/dashboard/login';
+  var AUTH_URL = 'https://auth-service-5gcrg4oiza-uc.a.run.app/dashboard/login';
 
   var ALL_TABS = [
     { key: 'overview',       label: 'Overview',       href: '/overview',       admin: true  },
@@ -85,8 +85,8 @@
     document.body.appendChild(gate);
   }
 
-  var PORTAL_GITHUB_URL = 'https://auth-service-rodmen07-v2.fly.dev/user/oauth/github?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
-  var PORTAL_GOOGLE_URL = 'https://auth-service-rodmen07-v2.fly.dev/user/oauth/google?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
+  var PORTAL_GITHUB_URL = 'https://auth-service-5gcrg4oiza-uc.a.run.app/user/oauth/github?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
+  var PORTAL_GOOGLE_URL = 'https://auth-service-5gcrg4oiza-uc.a.run.app/user/oauth/google?scope=client_portal&redirect_uri=https%3A%2F%2Fdynamodb-dashboard-rodmen07.fly.dev%2Fportal';
 
   function guardPortalPage() {
     if (isAdmin() || isClient()) return;
