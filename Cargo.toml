@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 aws-config = "1.5"
-aws-sdk-dynamodb = "1.56"
+aws-sdk-dynamodb = "1.110"
 aws-sdk-cloudwatch = "1"
 aws-sdk-costexplorer = "1"
 tower-http = { version = "0.6", features = ["cors"] }
