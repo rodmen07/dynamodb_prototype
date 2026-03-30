@@ -33,8 +33,8 @@
   <nav id="main-nav"></nav>
   <script src="/auth.js"></script>
   <script>DashAuth.renderNav('silver');</script>
-  <h1>Silver Events</h1>
-  <p class="sub">Enriched and cleaned events — <code>stage#silver</code> records from DynamoDB.</p>
+  <h1>Silver Events — Normalized Audit Trail</h1>
+  <p class="sub">CloudTrail and GCP Audit Log events normalized into a common schema with provider, severity, actor, and resource fields.</p>
   <div class="stats">
     <div class="stat"><div class="stat-label">Silver</div><div class="stat-value silver" id="cnt-silver">—</div></div>
     <div class="stat"><div class="stat-label">Gold</div><div class="stat-value" id="cnt-gold">—</div></div>
@@ -42,7 +42,7 @@
   <div class="refresh" id="refresh-note"></div>
   <div id="status-msg" class="status loading">Loading records…</div>
   <table id="metrics" style="display:none">
-    <thead><tr><th>When</th><th>Type</th><th>Payload</th></tr></thead>
+    <thead><tr><th>When</th><th>Type</th><th>Provider</th><th>Severity</th><th>Actor</th><th>Payload</th></tr></thead>
     <tbody></tbody>
   </table>
   <script>
@@ -68,14 +68,38 @@
           const tr = document.createElement('tr');
           const tdWhen = document.createElement('td');
           tdWhen.textContent = item.when || '—';
+          tdWhen.style.whiteSpace = 'nowrap';
+          tdWhen.style.fontSize = '.82rem';
           const tdType = document.createElement('td');
           tdType.textContent = item.event_type || item.type || '—';
+          tdType.style.fontWeight = '600';
+          const tdProvider = document.createElement('td');
+          tdProvider.textContent = (item.provider || '—').toUpperCase();
+          tdProvider.style.fontSize = '.8rem';
+          const tdSeverity = document.createElement('td');
+          const sev = item.severity || '—';
+          tdSeverity.textContent = sev;
+          tdSeverity.style.fontWeight = '600';
+          tdSeverity.style.color = sev === 'critical' ? '#b91c1c' : sev === 'high' ? '#d97706' : sev === 'medium' ? '#2563eb' : '#15803d';
+          const tdActor = document.createElement('td');
+          const actor = item.actor || '—';
+          tdActor.textContent = actor.length > 40 ? '...' + actor.slice(-37) : actor;
+          tdActor.title = actor;
+          tdActor.style.fontSize = '.8rem';
+          tdActor.style.maxWidth = '200px';
+          tdActor.style.overflow = 'hidden';
+          tdActor.style.textOverflow = 'ellipsis';
           const tdPayload = document.createElement('td');
           const pre = document.createElement('pre');
-          pre.textContent = JSON.stringify(item, null, 2);
+          const display = Object.assign({}, item);
+          delete display.stage;
+          pre.textContent = JSON.stringify(display, null, 2);
           tdPayload.appendChild(pre);
           tr.appendChild(tdWhen);
           tr.appendChild(tdType);
+          tr.appendChild(tdProvider);
+          tr.appendChild(tdSeverity);
+          tr.appendChild(tdActor);
           tr.appendChild(tdPayload);
           tbody.appendChild(tr);
         });

@@ -33,8 +33,8 @@
   <nav id="main-nav"></nav>
   <script src="/auth.js"></script>
   <script>DashAuth.renderNav('bronze');</script>
-  <h1>Bronze Records</h1>
-  <p class="sub">Raw ingested events — <code>stage#bronze</code> records from DynamoDB.</p>
+  <h1>Bronze Records — Raw Audit Events</h1>
+  <p class="sub">Raw CloudTrail and GCP Audit Log events ingested into the medallion pipeline. 24 events across AWS and GCP providers.</p>
   <div class="stats">
     <div class="stat"><div class="stat-label">Bronze</div><div class="stat-value bronze" id="cnt-bronze">—</div></div>
     <div class="stat"><div class="stat-label">Cleaned</div><div class="stat-value" id="cnt-cleaned">—</div></div>

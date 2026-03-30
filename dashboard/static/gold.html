@@ -33,8 +33,8 @@
   <nav id="main-nav"></nav>
   <script src="/auth.js"></script>
   <script>DashAuth.renderNav('gold');</script>
-  <h1>Gold Metrics</h1>
-  <p class="sub">Aggregated medallion pipeline output — <code>stage#gold</code> records from DynamoDB.</p>
+  <h1>Gold Metrics — SOC 2 Risk Signals</h1>
+  <p class="sub">Risk-scored audit events from the medallion pipeline. SOC 2 Type II control mapping with severity-based scoring.</p>
   <div class="stats">
     <div class="stat"><div class="stat-label">Bronze</div><div class="stat-value" id="cnt-bronze">—</div></div>
     <div class="stat"><div class="stat-label">Cleaned</div><div class="stat-value" id="cnt-cleaned">—</div></div>
@@ -44,7 +44,7 @@
   <div class="refresh" id="refresh-note"></div>
   <div id="status-msg" class="status loading">Loading records…</div>
   <table id="metrics" style="display:none">
-    <thead><tr><th>Event Type</th><th>Risk Score</th><th>Payload</th></tr></thead>
+    <thead><tr><th>Event Type</th><th>Risk Score</th><th>Provider</th><th>SOC 2 Control</th><th>Payload</th></tr></thead>
     <tbody></tbody>
   </table>
   <script>
@@ -72,15 +72,25 @@
           tdType.textContent = item.event_type || item.type || '—';
           const tdRisk = document.createElement('td');
           const score = item.risk_score ?? item.score ?? '—';
-          tdRisk.textContent = score;
-          tdRisk.style.fontWeight = '600';
-          tdRisk.style.color = score >= 70 ? '#b91c1c' : score >= 40 ? '#d97706' : '#15803d';
+          const bucket = item.metric_bucket || '';
+          tdRisk.innerHTML = '<span style="font-weight:700;color:' + (score >= 70 ? '#b91c1c' : score >= 40 ? '#d97706' : '#15803d') + '">' + score + '</span>' + (bucket ? '<br><span style="font-size:.75rem;color:#888">' + bucket + '</span>' : '');
+          const tdProvider = document.createElement('td');
+          tdProvider.textContent = (item.provider || '—').toUpperCase();
+          tdProvider.style.fontWeight = '600';
+          tdProvider.style.fontSize = '.8rem';
+          const tdControl = document.createElement('td');
+          tdControl.textContent = item.control || '—';
+          tdControl.style.fontSize = '.82rem';
           const tdPayload = document.createElement('td');
           const pre = document.createElement('pre');
-          pre.textContent = JSON.stringify(item, null, 2);
+          const display = Object.assign({}, item);
+          delete display.stage; delete display.control; delete display.metric_bucket;
+          pre.textContent = JSON.stringify(display, null, 2);
           tdPayload.appendChild(pre);
           tr.appendChild(tdType);
           tr.appendChild(tdRisk);
+          tr.appendChild(tdProvider);
+          tr.appendChild(tdControl);
           tr.appendChild(tdPayload);
           tbody.appendChild(tr);
         });
