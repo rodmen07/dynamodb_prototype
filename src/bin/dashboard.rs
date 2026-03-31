@@ -1261,7 +1261,13 @@ async fn handler_portal_projects(
     require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
     let url = format!("{}/api/v1/projects", projects_api_url().trim_end_matches('/'));
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    Ok(Json(serde_json::json!([
+        {"id":"proj-001","account_id":"acct-100","name":"GCP Cloud Migration","description":"Migrate legacy AWS workloads to GCP Cloud Run with zero-downtime cutover","status":"active","start_date":"2026-02-15","target_end_date":"2026-05-30"},
+        {"id":"proj-002","account_id":"acct-101","name":"SOC 2 Readiness Program","description":"Implement controls, evidence collection, and audit preparation for SOC 2 Type II certification","status":"planning","start_date":"2026-04-01","target_end_date":"2026-09-30"}
+    ])))
 }
 
 async fn handler_portal_milestones(
@@ -1275,7 +1281,24 @@ async fn handler_portal_milestones(
         "{}/api/v1/projects/{id}/milestones",
         projects_api_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    let milestones = match id.as_str() {
+        "proj-001" => serde_json::json!([
+            {"id":"ms-001","project_id":"proj-001","name":"Discovery & Architecture","description":"Audit existing infra, design target GCP architecture, identify migration waves","due_date":"2026-03-01","status":"completed","sort_order":0},
+            {"id":"ms-002","project_id":"proj-001","name":"Wave 1 — Auth & Gateway","description":"Migrate auth-service and go-gateway to Cloud Run","due_date":"2026-03-21","status":"completed","sort_order":1},
+            {"id":"ms-003","project_id":"proj-001","name":"Wave 2 — Core Microservices","description":"Migrate remaining Rust microservices (accounts, contacts, opportunities, activities, projects, reporting, search)","due_date":"2026-04-15","status":"in_progress","sort_order":2},
+            {"id":"ms-004","project_id":"proj-001","name":"Observability & Hardening","description":"Deploy Observaboard, finalize monitoring dashboards, load-test all endpoints","due_date":"2026-05-15","status":"pending","sort_order":3}
+        ]),
+        "proj-002" => serde_json::json!([
+            {"id":"ms-010","project_id":"proj-002","name":"Gap Assessment","description":"Map current controls against SOC 2 Trust Service Criteria","due_date":"2026-04-30","status":"pending","sort_order":0},
+            {"id":"ms-011","project_id":"proj-002","name":"Control Implementation","description":"Implement missing controls identified in gap assessment","due_date":"2026-07-15","status":"pending","sort_order":1},
+            {"id":"ms-012","project_id":"proj-002","name":"Audit Preparation","description":"Collect evidence, prepare documentation, conduct readiness review","due_date":"2026-09-15","status":"pending","sort_order":2}
+        ]),
+        _ => serde_json::json!([]),
+    };
+    Ok(Json(milestones))
 }
 
 async fn handler_portal_deliverables(
@@ -1289,7 +1312,52 @@ async fn handler_portal_deliverables(
         "{}/api/v1/milestones/{id}/deliverables",
         projects_api_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    let deliverables = match id.as_str() {
+        "ms-001" => serde_json::json!([
+            {"id":"del-001","milestone_id":"ms-001","name":"Infrastructure audit report","status":"completed"},
+            {"id":"del-002","milestone_id":"ms-001","name":"Target architecture diagram","status":"completed"},
+            {"id":"del-003","milestone_id":"ms-001","name":"Migration wave plan","status":"completed"}
+        ]),
+        "ms-002" => serde_json::json!([
+            {"id":"del-004","milestone_id":"ms-002","name":"auth-service Cloud Run deployment","status":"completed"},
+            {"id":"del-005","milestone_id":"ms-002","name":"go-gateway Cloud Run deployment","status":"completed"},
+            {"id":"del-006","milestone_id":"ms-002","name":"CI/CD pipeline (GitHub Actions → GCR → Cloud Run)","status":"completed"},
+            {"id":"del-007","milestone_id":"ms-002","name":"DNS cutover and TLS verification","status":"completed"}
+        ]),
+        "ms-003" => serde_json::json!([
+            {"id":"del-008","milestone_id":"ms-003","name":"accounts-service migration","status":"completed"},
+            {"id":"del-009","milestone_id":"ms-003","name":"contacts-service migration","status":"completed"},
+            {"id":"del-010","milestone_id":"ms-003","name":"opportunities-service migration","status":"in_progress"},
+            {"id":"del-011","milestone_id":"ms-003","name":"activities-service migration","status":"in_progress"},
+            {"id":"del-012","milestone_id":"ms-003","name":"projects-service migration","status":"not_started"},
+            {"id":"del-013","milestone_id":"ms-003","name":"reporting-service migration","status":"not_started"},
+            {"id":"del-014","milestone_id":"ms-003","name":"search-service migration","status":"not_started"}
+        ]),
+        "ms-004" => serde_json::json!([
+            {"id":"del-015","milestone_id":"ms-004","name":"Observaboard deployment and webhook integration","status":"not_started"},
+            {"id":"del-016","milestone_id":"ms-004","name":"Cloud Monitoring dashboards","status":"not_started"},
+            {"id":"del-017","milestone_id":"ms-004","name":"Load testing (k6 scripts)","status":"not_started"},
+            {"id":"del-018","milestone_id":"ms-004","name":"Runbook documentation","status":"not_started"}
+        ]),
+        "ms-010" => serde_json::json!([
+            {"id":"del-020","milestone_id":"ms-010","name":"Trust Service Criteria mapping spreadsheet","status":"not_started"},
+            {"id":"del-021","milestone_id":"ms-010","name":"Gap analysis report","status":"not_started"}
+        ]),
+        "ms-011" => serde_json::json!([
+            {"id":"del-022","milestone_id":"ms-011","name":"Access control policy enforcement","status":"not_started"},
+            {"id":"del-023","milestone_id":"ms-011","name":"Logging and monitoring controls","status":"not_started"},
+            {"id":"del-024","milestone_id":"ms-011","name":"Change management procedures","status":"not_started"}
+        ]),
+        "ms-012" => serde_json::json!([
+            {"id":"del-025","milestone_id":"ms-012","name":"Evidence collection package","status":"not_started"},
+            {"id":"del-026","milestone_id":"ms-012","name":"Internal readiness review","status":"not_started"}
+        ]),
+        _ => serde_json::json!([]),
+    };
+    Ok(Json(deliverables))
 }
 
 async fn handler_portal_messages(
@@ -1303,7 +1371,19 @@ async fn handler_portal_messages(
         "{}/api/v1/projects/{id}/messages",
         projects_api_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    let messages = match id.as_str() {
+        "proj-001" => serde_json::json!([
+            {"id":"msg-001","project_id":"proj-001","author_id":"admin-001","author_role":"admin","body":"Wave 1 migrations are complete — auth-service and go-gateway are live on Cloud Run. Starting Wave 2 this week.","created_at":"2026-03-22T10:30:00Z"},
+            {"id":"msg-002","project_id":"proj-001","author_id":"client-001","author_role":"client","body":"Great news! Are there any expected downtime windows for the Wave 2 services?","created_at":"2026-03-22T14:15:00Z"},
+            {"id":"msg-003","project_id":"proj-001","author_id":"admin-001","author_role":"admin","body":"No downtime expected — we run the new Cloud Run services in parallel and do a DNS cutover once health checks pass. Same pattern as Wave 1.","created_at":"2026-03-22T15:00:00Z"},
+            {"id":"msg-004","project_id":"proj-001","author_id":"admin-001","author_role":"admin","body":"accounts-service and contacts-service are now live on Cloud Run. Moving to opportunities-service next.","created_at":"2026-03-28T09:00:00Z"}
+        ]),
+        _ => serde_json::json!([]),
+    };
+    Ok(Json(messages))
 }
 
 async fn handler_portal_send_message(
@@ -1641,7 +1721,14 @@ async fn handler_reports_dashboard(
         "{}/api/v1/reports/dashboard",
         reporting_service_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    Ok(Json(serde_json::json!({
+        "active_reports": 5,
+        "core_metrics": ["opportunities_by_stage", "revenue_by_account", "activities_by_type", "health_score", "nps_trend"],
+        "_demo": true
+    })))
 }
 
 async fn handler_reports_list(
@@ -1654,7 +1741,16 @@ async fn handler_reports_list(
         "{}/api/v1/reports",
         reporting_service_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    Ok(Json(serde_json::json!([
+        {"id":"rpt-001","name":"Weekly Pipeline Report","description":"Opportunities by stage with week-over-week delta","metric":"opportunities_by_stage","dimension":"account","created_at":"2026-03-10T09:00:00Z","updated_at":"2026-03-28T14:22:00Z"},
+        {"id":"rpt-002","name":"Monthly Revenue Summary","description":"Closed-won revenue rolled up by account and rep","metric":"revenue_by_account","dimension":"month","created_at":"2026-03-12T11:30:00Z","updated_at":"2026-03-29T08:15:00Z"},
+        {"id":"rpt-003","name":"Activity Tracker","description":"Emails, calls, and meetings logged per rep per week","metric":"activities_by_type","dimension":"rep","created_at":"2026-03-14T15:00:00Z","updated_at":"2026-03-27T10:45:00Z"},
+        {"id":"rpt-004","name":"Client Health Score","description":"Composite health score based on engagement, NPS, and ticket volume","metric":"health_score","dimension":"account","created_at":"2026-03-18T08:00:00Z","updated_at":"2026-03-30T16:00:00Z"},
+        {"id":"rpt-005","name":"NPS Trend Report","description":"Net Promoter Score trend with quarterly rolling average","metric":"nps_trend","dimension":"quarter","created_at":"2026-03-20T13:00:00Z","updated_at":"2026-03-30T09:30:00Z"}
+    ])))
 }
 
 async fn handler_reports_create(
@@ -1716,7 +1812,26 @@ async fn handler_observaboard_events(
         "{}/api/events/?{qs}",
         observaboard_url().trim_end_matches('/')
     );
-    proxy_get(&s.http, &url, auth).await
+    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
+        return Ok(r);
+    }
+    // Demo events covering deployment, security, alert, metric, and info categories
+    Ok(Json(serde_json::json!({
+        "count": 8,
+        "next": null,
+        "previous": null,
+        "results": [
+            {"id":1,"source":"github-actions","event_type":"workflow_run.completed","category":"deployment","severity":"low","summary":"Deploy auth-service v1.2.4 to Cloud Run (us-central1) — all health checks passed","raw_payload":{"repo":"auth-service","branch":"main","commit":"a1b2c3d","status":"success","duration_s":142},"classified":true,"created_at":"2026-03-31T06:45:00Z"},
+            {"id":2,"source":"gcp-security-command-center","event_type":"finding.created","category":"security","severity":"high","summary":"IAM policy change detected — service account granted roles/editor on project rm-cloud-prod","raw_payload":{"finding_id":"SCC-2026-0331-001","resource":"projects/rm-cloud-prod","actor":"admin@rmcloud.dev","action":"SetIamPolicy"},"classified":true,"created_at":"2026-03-31T05:12:00Z"},
+            {"id":3,"source":"fly-machines","event_type":"machine.scaled","category":"metric","severity":"low","summary":"dynamodb-dashboard-rodmen07 scaled from 0 → 1 machine (iad region, wake-on-request)","raw_payload":{"app":"dynamodb-dashboard-rodmen07","region":"iad","from":0,"to":1,"trigger":"http_request"},"classified":true,"created_at":"2026-03-31T04:30:00Z"},
+            {"id":4,"source":"github-dependabot","event_type":"alert.created","category":"security","severity":"medium","summary":"CVE-2026-1234 in tokio-rustls 0.25.x — upgrade to 0.26.0 recommended","raw_payload":{"cve":"CVE-2026-1234","package":"tokio-rustls","severity":"moderate","repo":"microservices","pr_url":"#412"},"classified":true,"created_at":"2026-03-30T22:00:00Z"},
+            {"id":5,"source":"cloud-run","event_type":"revision.deployed","category":"deployment","severity":"low","summary":"projects-service revision projects-service-00014 deployed — 0 → 1 instances, healthy","raw_payload":{"service":"projects-service","revision":"projects-service-00014","region":"us-central1","image_tag":"abc123f"},"classified":true,"created_at":"2026-03-30T18:15:00Z"},
+            {"id":6,"source":"uptime-monitor","event_type":"check.recovered","category":"alert","severity":"medium","summary":"go-gateway health endpoint recovered after 4m32s downtime (cold start after scale-to-zero)","raw_payload":{"monitor":"go-gateway-health","downtime_s":272,"region":"us-central1","status_code":200},"classified":true,"created_at":"2026-03-30T15:48:00Z"},
+            {"id":7,"source":"medallion-pipeline","event_type":"gold.metric_published","category":"metric","severity":"low","summary":"Gold metrics batch published — 24 SOC 2 controls evaluated, 22 passing, 2 monitored","raw_payload":{"batch_id":"gold-2026-0330","controls_total":24,"controls_passing":22,"controls_monitored":2,"pipeline_stage":"gold"},"classified":true,"created_at":"2026-03-30T12:00:00Z"},
+            {"id":8,"source":"github-actions","event_type":"workflow_run.completed","category":"info","severity":"low","summary":"CI pipeline for frontend-service completed — build + lint + type-check passed in 1m48s","raw_payload":{"repo":"frontend-service","branch":"main","commit":"def456g","workflow":"ci","duration_s":108,"status":"success"},"classified":true,"created_at":"2026-03-30T10:30:00Z"}
+        ],
+        "_demo": true
+    })))
 }
 
 // ---------------------------------------------------------------------------
