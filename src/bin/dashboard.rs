@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, RawQuery, State},
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::Html,
-    routing::{delete, get, patch, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use aws_config::meta::region::RegionProviderChain;
@@ -1615,11 +1615,11 @@ async fn handler_spend(
 async fn handler_search(
     State(s): State<DashState>,
     headers: HeaderMap,
-    raw_query: Option<RawQuery>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
-    let qs = raw_query.map(|RawQuery(q)| q).unwrap_or_default();
+    let qs = raw_query.unwrap_or_default();
     let url = format!(
         "{}/api/v1/search?{qs}",
         search_service_url().trim_end_matches('/')
@@ -1707,11 +1707,11 @@ async fn handler_reports_delete(
 async fn handler_observaboard_events(
     State(s): State<DashState>,
     headers: HeaderMap,
-    raw_query: Option<RawQuery>,
+    RawQuery(raw_query): RawQuery,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
     let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
-    let qs = raw_query.map(|RawQuery(q)| q).unwrap_or_default();
+    let qs = raw_query.unwrap_or_default();
     let url = format!(
         "{}/api/events/?{qs}",
         observaboard_url().trim_end_matches('/')
