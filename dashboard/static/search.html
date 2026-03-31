@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Search</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .search-bar{display:flex;gap:8px;margin-bottom:20px}
+    .search-bar input{flex:1;padding:10px 14px;border:1px solid #d1d5db;border-radius:8px;font-size:.95rem;outline:none;transition:border-color .15s}
+    .search-bar input:focus{border-color:#1a1a2e;box-shadow:0 0 0 2px rgba(26,26,46,.12)}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.info{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .group{margin-bottom:24px}
+    .group-header{font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#6b7280;margin:0 0 8px;padding-bottom:6px;border-bottom:2px solid #e5e7eb}
+    .result{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin-bottom:8px}
+    .result-title{font-weight:600;font-size:.95rem;margin-bottom:2px}
+    .result-snippet{font-size:.85rem;color:#555}
+    .result-meta{font-size:.75rem;color:#9ca3af;margin-top:4px}
+    .badge-type{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+    .badge-account{background:#dbeafe;color:#1d4ed8}
+    .badge-contact{background:#dcfce7;color:#15803d}
+    .badge-opportunity{background:#fef3c7;color:#92400e}
+    .badge-activity{background:#f3e8ff;color:#7c3aed}
+    .empty{text-align:center;color:#9ca3af;padding:40px 20px;font-size:.9rem}
+    .count{font-size:.8rem;color:#888;margin-bottom:12px}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('search'); DashAuth.guardPortalPage();</script>
+  <h1>Search</h1>
+  <p class="sub">Search across accounts, contacts, opportunities, and activities.</p>
+  <div class="search-bar">
+    <input type="text" id="q" placeholder="Type to search..." autofocus>
+  </div>
+  <div id="count" class="count"></div>
+  <div id="status-msg" style="display:none"></div>
+  <div id="results"></div>
+  <script>
+    var debounceTimer;
+    var input = document.getElementById('q');
+    var resultsEl = document.getElementById('results');
+    var countEl = document.getElementById('count');
+    var statusEl = document.getElementById('status-msg');
+
+    input.addEventListener('input', function() {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(doSearch, 300);
+    });
+
+    function doSearch() {
+      var q = input.value.trim();
+      if (!q) {
+        resultsEl.innerHTML = '';
+        countEl.textContent = '';
+        statusEl.style.display = 'none';
+        return;
+      }
+      statusEl.className = 'status info';
+      statusEl.textContent = 'Searching...';
+      statusEl.style.display = 'block';
+
+      DashAuth.authFetch('/api/search?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          statusEl.style.display = 'none';
+          if (!Array.isArray(data) || data.length === 0) {
+            countEl.textContent = '0 results';
+            resultsEl.innerHTML = '<div class="empty">No results found for "' + escapeHtml(q) + '"</div>';
+            return;
+          }
+          countEl.textContent = data.length + ' result' + (data.length === 1 ? '' : 's');
+          renderGrouped(data);
+        })
+        .catch(function(err) {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'Search failed: ' + err.message;
+          statusEl.style.display = 'block';
+          resultsEl.innerHTML = '';
+          countEl.textContent = '';
+        });
+    }
+
+    function renderGrouped(items) {
+      var groups = {};
+      items.forEach(function(item) {
+        var type = item.entity_type || 'other';
+        if (!groups[type]) groups[type] = [];
+        groups[type].push(item);
+      });
+      var order = ['account', 'contact', 'opportunity', 'activity'];
+      var keys = Object.keys(groups).sort(function(a, b) {
+        var ai = order.indexOf(a), bi = order.indexOf(b);
+        if (ai === -1) ai = 999;
+        if (bi === -1) bi = 999;
+        return ai - bi;
+      });
+      var html = '';
+      keys.forEach(function(type) {
+        html += '<div class="group"><div class="group-header">' + escapeHtml(type) + 's (' + groups[type].length + ')</div>';
+        groups[type].forEach(function(item) {
+          var badgeCls = 'badge-type badge-' + type;
+          html += '<div class="result">'
+            + '<div class="result-title"><span class="' + badgeCls + '">' + escapeHtml(type) + '</span> ' + escapeHtml(item.title || item.entity_id) + '</div>'
+            + '<div class="result-snippet">' + escapeHtml(item.snippet || '') + '</div>'
+            + '<div class="result-meta">ID: ' + escapeHtml(item.entity_id || item.id) + '</div>'
+            + '</div>';
+        });
+        html += '</div>';
+      });
+      resultsEl.innerHTML = html;
+    }
+
+    function escapeHtml(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(s));
+      return d.innerHTML;
+    }
+  </script>
+</body>
+</html>

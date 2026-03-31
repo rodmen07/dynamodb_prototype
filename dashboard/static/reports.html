@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reports</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:130px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-value.blue{color:#1d4ed8}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .btn{padding:8px 16px;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer;border:none;transition:background .15s}
+    .btn-primary{background:#1a1a2e;color:#fff}
+    .btn-primary:hover{background:#2d2d4e}
+    .btn-sm{padding:4px 10px;font-size:.78rem}
+    .btn-danger{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .btn-danger:hover{background:#fee2e2}
+    .btn-ghost{background:transparent;color:#555;border:1px solid #d1d5db}
+    .btn-ghost:hover{background:#f3f4f6}
+    table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    th{background:#f4f4f7;padding:10px 12px;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#555}
+    td{border-top:1px solid #eee;padding:10px 12px;vertical-align:middle;font-size:.875rem}
+    .actions{display:flex;gap:6px}
+    .empty{text-align:center;color:#9ca3af;padding:40px 20px;font-size:.9rem}
+    .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:100}
+    .modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;box-shadow:0 10px 40px rgba(0,0,0,.15)}
+    .modal h2{margin:0 0 16px;font-size:1.1rem}
+    .modal label{display:block;font-size:.82rem;font-weight:600;color:#555;margin-bottom:4px;margin-top:12px}
+    .modal input,.modal textarea{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.9rem;outline:none}
+    .modal input:focus,.modal textarea:focus{border-color:#1a1a2e}
+    .modal textarea{resize:vertical;min-height:60px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+    .chip{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.72rem;font-weight:600;background:#f3f4f6;color:#4b5563}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('reports'); DashAuth.guardPortalPage();</script>
+  <h1>Reports</h1>
+  <p class="sub">Saved CRM metric reports. Create, edit, and manage your reporting configuration.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Active Reports</div><div class="stat-value blue" id="cnt-active">--</div></div>
+    <div class="stat"><div class="stat-label">Core Metrics</div><div class="stat-value" id="cnt-metrics">--</div></div>
+  </div>
+  <div id="status-msg" class="status loading">Loading reports...</div>
+  <div class="toolbar">
+    <span id="table-count" style="font-size:.82rem;color:#888"></span>
+    <button class="btn btn-primary" onclick="openModal()">+ New Report</button>
+  </div>
+  <table id="reports-table" style="display:none">
+    <thead>
+      <tr><th>Name</th><th>Metric</th><th>Dimension</th><th>Description</th><th>Updated</th><th>Actions</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty-msg" class="empty" style="display:none">No reports yet. Click <strong>+ New Report</strong> to create one.</div>
+  <div id="modal-root"></div>
+  <script>
+    var reports = [];
+
+    function load() {
+      var statusEl = document.getElementById('status-msg');
+      statusEl.style.display = 'block';
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading reports...';
+
+      Promise.all([
+        DashAuth.authFetch('/api/reports/dashboard').then(function(r) { return r.json(); }).catch(function() { return null; }),
+        DashAuth.authFetch('/api/reports').then(function(r) { return r.json(); }).catch(function() { return []; })
+      ]).then(function(results) {
+        var dash = results[0];
+        var list = results[1];
+        statusEl.style.display = 'none';
+
+        if (dash) {
+          document.getElementById('cnt-active').textContent = dash.active_reports || 0;
+          var metrics = dash.core_metrics || [];
+          document.getElementById('cnt-metrics').textContent = metrics.length;
+        }
+
+        reports = Array.isArray(list) ? list : [];
+        renderTable();
+      }).catch(function(err) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Failed to load: ' + err.message;
+      });
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('tbody');
+      var table = document.getElementById('reports-table');
+      var emptyMsg = document.getElementById('empty-msg');
+      var countEl = document.getElementById('table-count');
+
+      if (reports.length === 0) {
+        table.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        countEl.textContent = '';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+      table.style.display = 'table';
+      countEl.textContent = reports.length + ' report' + (reports.length === 1 ? '' : 's');
+
+      tbody.innerHTML = reports.map(function(r) {
+        var updated = r.updated_at ? new Date(r.updated_at).toLocaleDateString() : '--';
+        return '<tr>'
+          + '<td><strong>' + esc(r.name) + '</strong></td>'
+          + '<td><span class="chip">' + esc(r.metric) + '</span></td>'
+          + '<td>' + esc(r.dimension || '--') + '</td>'
+          + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(r.description || '') + '">' + esc(r.description || '--') + '</td>'
+          + '<td style="white-space:nowrap">' + updated + '</td>'
+          + '<td class="actions">'
+          + '<button class="btn btn-sm btn-ghost" onclick="openModal(\'' + esc(r.id) + '\')">Edit</button>'
+          + '<button class="btn btn-sm btn-danger" onclick="deleteReport(\'' + esc(r.id) + '\')">Delete</button>'
+          + '</td></tr>';
+      }).join('');
+    }
+
+    function openModal(editId) {
+      var report = editId ? reports.find(function(r) { return r.id === editId; }) : null;
+      var isEdit = !!report;
+      var root = document.getElementById('modal-root');
+      root.innerHTML = '<div class="modal-overlay" onclick="closeModal(event)">'
+        + '<div class="modal" onclick="event.stopPropagation()">'
+        + '<h2>' + (isEdit ? 'Edit Report' : 'New Report') + '</h2>'
+        + '<label>Name</label><input id="m-name" value="' + esc(report ? report.name : '') + '">'
+        + '<label>Metric</label><input id="m-metric" value="' + esc(report ? report.metric : '') + '" placeholder="e.g. opportunities_by_stage">'
+        + '<label>Dimension (optional)</label><input id="m-dim" value="' + esc(report ? report.dimension || '' : '') + '" placeholder="e.g. account">'
+        + '<label>Description (optional)</label><textarea id="m-desc">' + esc(report ? report.description || '' : '') + '</textarea>'
+        + '<div class="modal-actions">'
+        + '<button class="btn btn-ghost" onclick="closeModal()">Cancel</button>'
+        + '<button class="btn btn-primary" onclick="saveReport(\'' + (editId || '') + '\')">' + (isEdit ? 'Update' : 'Create') + '</button>'
+        + '</div></div></div>';
+    }
+
+    function closeModal(e) {
+      if (e && e.target !== e.currentTarget) return;
+      document.getElementById('modal-root').innerHTML = '';
+    }
+
+    function saveReport(editId) {
+      var body = {
+        name: document.getElementById('m-name').value.trim(),
+        metric: document.getElementById('m-metric').value.trim(),
+        dimension: document.getElementById('m-dim').value.trim() || undefined,
+        description: document.getElementById('m-desc').value.trim() || undefined
+      };
+      if (!body.name || !body.metric) { alert('Name and Metric are required'); return; }
+
+      var url = editId ? '/api/reports/' + editId : '/api/reports';
+      var method = editId ? 'PATCH' : 'POST';
+
+      DashAuth.authFetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) })
+        .then(function(r) { return r.json(); })
+        .then(function() { closeModal(); load(); })
+        .catch(function(err) { alert('Save failed: ' + err.message); });
+    }
+
+    function deleteReport(id) {
+      if (!confirm('Delete this report?')) return;
+      DashAuth.authFetch('/api/reports/' + id, { method: 'DELETE' })
+        .then(function() { load(); })
+        .catch(function(err) { alert('Delete failed: ' + err.message); });
+    }
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(s || ''));
+      return d.innerHTML;
+    }
+
+    load();
+  </script>
+</body>
+</html>

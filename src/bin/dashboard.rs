@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, RawQuery, State},
     http::{HeaderMap, HeaderValue, Method, StatusCode, header},
     response::Html,
-    routing::{get, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use aws_config::meta::region::RegionProviderChain;
@@ -330,10 +330,18 @@ async fn handler_stats(
             }
         }
     }
-    if counts.values().sum::<u64>() == 0 {
+    // Per-stage fallback: match the fallback record counts used by each
+    // stage handler so the stat badges stay consistent with the table data.
+    if counts.get("bronze").copied().unwrap_or(0) == 0 {
         counts.insert("bronze".to_string(), 24);
+    }
+    if counts.get("bronze_cleaned").copied().unwrap_or(0) == 0 {
         counts.insert("bronze_cleaned".to_string(), 24);
+    }
+    if counts.get("silver").copied().unwrap_or(0) == 0 {
         counts.insert("silver".to_string(), 19);
+    }
+    if counts.get("gold").copied().unwrap_or(0) == 0 {
         counts.insert("gold".to_string(), 14);
     }
     Ok(Json(serde_json::json!({"counts": counts})))
@@ -1109,6 +1117,21 @@ fn projects_api_url() -> String {
         .unwrap_or_else(|_| "http://localhost:3001".to_string())
 }
 
+fn search_service_url() -> String {
+    std::env::var("SEARCH_SERVICE_URL")
+        .unwrap_or_else(|_| "http://localhost:8001".to_string())
+}
+
+fn reporting_service_url() -> String {
+    std::env::var("REPORTING_SERVICE_URL")
+        .unwrap_or_else(|_| "http://localhost:8002".to_string())
+}
+
+fn observaboard_url() -> String {
+    std::env::var("OBSERVABOARD_URL")
+        .unwrap_or_else(|_| "http://localhost:8003".to_string())
+}
+
 async fn proxy_get(
     http: &reqwest::Client,
     url: &str,
@@ -1135,6 +1158,100 @@ async fn proxy_get(
             body.to_string(),
         ))
     }
+}
+
+async fn handler_security(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin_or_client(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+
+    // Try loading from DynamoDB cache
+    let table_name = std::env::var("DDB_TABLE").unwrap_or_else(|_| "example_table".to_string());
+    if let Ok(resp) = s
+        .ddb
+        .get_item()
+        .table_name(&table_name)
+        .key("pk", AttributeValue::S("cache#security".to_string()))
+        .key("sk", AttributeValue::S("latest".to_string()))
+        .send()
+        .await
+    {
+        if let Some(item) = resp.item() {
+            if let Some(payload) = item.get("payload").and_then(|v| v.as_s().ok()) {
+                if let Ok(json) = serde_json::from_str::<Value>(payload) {
+                    return Ok(Json(json));
+                }
+            }
+        }
+    }
+
+    // Fallback: baseline security posture
+    Ok(Json(serde_json::json!({
+        "summary": {
+            "total_controls": 24,
+            "enabled": 22,
+            "monitored": 18,
+            "last_assessed": "2026-03-28T16:00:00Z"
+        },
+        "categories": [
+            {
+                "name": "Access Control",
+                "controls": [
+                    {"control":"Multi-Factor Authentication (MFA)","status":"enabled","resource":"AWS IAM / GCP Identity","soc2_ref":"CC6.1","detail":"Required for all console and programmatic access"},
+                    {"control":"Role-Based Access Control (RBAC)","status":"enabled","resource":"AWS IAM Roles / GCP IAM","soc2_ref":"CC6.2","detail":"Least-privilege roles per service; no standing admin access"},
+                    {"control":"Service Account Key Rotation","status":"monitored","resource":"GCP Service Accounts","soc2_ref":"CC6.3","detail":"Keys rotated every 90 days; alerts on stale credentials"},
+                    {"control":"Session Timeout Policy","status":"enabled","resource":"AWS SSO / Dashboard JWT","soc2_ref":"CC6.1","detail":"Idle sessions expire after 60 minutes"}
+                ]
+            },
+            {
+                "name": "Encryption",
+                "controls": [
+                    {"control":"Encryption at Rest","status":"enabled","resource":"DynamoDB / S3 / RDS","soc2_ref":"CC6.7","detail":"AES-256 via AWS KMS; customer-managed keys for production"},
+                    {"control":"Encryption in Transit","status":"enabled","resource":"All services","soc2_ref":"CC6.7","detail":"TLS 1.2+ enforced on all endpoints; HSTS enabled"},
+                    {"control":"KMS Key Rotation","status":"enabled","resource":"AWS KMS","soc2_ref":"CC6.7","detail":"Automatic annual rotation; manual rotation available on demand"},
+                    {"control":"Secret Management","status":"enabled","resource":"AWS Secrets Manager / GCP Secret Manager","soc2_ref":"CC6.7","detail":"No plaintext secrets in code or environment variables"}
+                ]
+            },
+            {
+                "name": "Network Security",
+                "controls": [
+                    {"control":"VPC Isolation","status":"enabled","resource":"AWS VPC","soc2_ref":"CC6.6","detail":"Production workloads in private subnets; no public IPs on databases"},
+                    {"control":"Security Group Least-Privilege","status":"enabled","resource":"AWS EC2 / GCP Firewall Rules","soc2_ref":"CC6.6","detail":"Ingress restricted to required ports; 0.0.0.0/0 blocked on SSH/RDP"},
+                    {"control":"WAF / DDoS Protection","status":"enabled","resource":"Fly.io edge / AWS Shield","soc2_ref":"CC6.6","detail":"Rate limiting and geo-blocking at edge; AWS Shield Standard on all resources"},
+                    {"control":"DNS Security","status":"configured","resource":"Route53 / Fly.io DNS","soc2_ref":"CC6.6","detail":"DNSSEC enabled; CAA records restrict certificate issuance"}
+                ]
+            },
+            {
+                "name": "Logging & Monitoring",
+                "controls": [
+                    {"control":"CloudTrail Audit Logging","status":"enabled","resource":"AWS CloudTrail","soc2_ref":"CC7.2","detail":"All API calls logged to S3 with integrity validation"},
+                    {"control":"GCP Audit Logs","status":"enabled","resource":"GCP Cloud Logging","soc2_ref":"CC7.2","detail":"Admin Activity and Data Access logs exported to central sink"},
+                    {"control":"GuardDuty Threat Detection","status":"monitored","resource":"AWS GuardDuty","soc2_ref":"CC7.3","detail":"Continuous monitoring for brute force, crypto mining, data exfiltration"},
+                    {"control":"Alerting Pipeline","status":"monitored","resource":"Medallion Pipeline (Bronze/Silver/Gold)","soc2_ref":"CC7.3","detail":"Risk-scored events surfaced on Gold page within 5 minutes of detection"}
+                ]
+            },
+            {
+                "name": "Backup & Recovery",
+                "controls": [
+                    {"control":"Automated Backups","status":"enabled","resource":"DynamoDB / RDS / GCP SQL","soc2_ref":"A1.2","detail":"Point-in-time recovery enabled; 35-day retention for RDS"},
+                    {"control":"Cross-Region Replication","status":"configured","resource":"S3 / DynamoDB Global Tables","soc2_ref":"A1.2","detail":"Critical data replicated to us-west-2 for DR"},
+                    {"control":"Recovery Testing","status":"monitored","resource":"All databases","soc2_ref":"A1.2","detail":"Quarterly restore drills; RTO target 4h, RPO target 1h"},
+                    {"control":"Infrastructure as Code","status":"enabled","resource":"SAM / Terraform / Dockerfiles","soc2_ref":"CC8.1","detail":"All infrastructure reproducible from version-controlled templates"}
+                ]
+            },
+            {
+                "name": "Compliance",
+                "controls": [
+                    {"control":"SOC 2 Control Mapping","status":"enabled","resource":"Gold Metrics Pipeline","soc2_ref":"CC1.1","detail":"Automated mapping of cloud events to SOC 2 Type II controls"},
+                    {"control":"Dependency Scanning","status":"monitored","resource":"GitHub Dependabot / Cargo Audit","soc2_ref":"CC8.1","detail":"Automated vulnerability scanning on every PR; critical CVEs block merge"},
+                    {"control":"Container Image Scanning","status":"enabled","resource":"Docker images (Fly.io, GCR)","soc2_ref":"CC8.1","detail":"Images scanned before deployment; no known critical vulnerabilities"},
+                    {"control":"Change Management","status":"enabled","resource":"GitHub PRs / CI/CD","soc2_ref":"CC8.1","detail":"All production changes require PR review and passing CI checks"}
+                ]
+            }
+        ],
+        "_demo": true
+    })))
 }
 
 async fn handler_portal_projects(
@@ -1244,6 +1361,69 @@ async fn proxy_post(
         .json()
         .await
         .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    if status.is_success() {
+        Ok(Json(resp_body))
+    } else {
+        Err((
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            resp_body.to_string(),
+        ))
+    }
+}
+
+async fn proxy_patch(
+    http: &reqwest::Client,
+    url: &str,
+    auth: Option<&str>,
+    body: Value,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let mut req = http.patch(url).json(&body);
+    if let Some(a) = auth {
+        req = req.header("Authorization", a);
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    let status = resp.status();
+    let resp_body: Value = resp
+        .json()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    if status.is_success() {
+        Ok(Json(resp_body))
+    } else {
+        Err((
+            StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::BAD_GATEWAY),
+            resp_body.to_string(),
+        ))
+    }
+}
+
+async fn proxy_delete(
+    http: &reqwest::Client,
+    url: &str,
+    auth: Option<&str>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let mut req = http.delete(url);
+    if let Some(a) = auth {
+        req = req.header("Authorization", a);
+    }
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    let status = resp.status();
+    // DELETE may return 204 with no body
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| (StatusCode::BAD_GATEWAY, e.to_string()))?;
+    let resp_body: Value = if text.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(&text).unwrap_or(Value::Null)
+    };
     if status.is_success() {
         Ok(Json(resp_body))
     } else {
@@ -1429,6 +1609,117 @@ async fn handler_spend(
 }
 
 // ---------------------------------------------------------------------------
+// Search proxy (admin-only)
+// ---------------------------------------------------------------------------
+
+async fn handler_search(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    raw_query: Option<RawQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let qs = raw_query.map(|RawQuery(q)| q).unwrap_or_default();
+    let url = format!(
+        "{}/api/v1/search?{qs}",
+        search_service_url().trim_end_matches('/')
+    );
+    proxy_get(&s.http, &url, auth).await
+}
+
+// ---------------------------------------------------------------------------
+// Reports proxy (admin-only CRUD)
+// ---------------------------------------------------------------------------
+
+async fn handler_reports_dashboard(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/reports/dashboard",
+        reporting_service_url().trim_end_matches('/')
+    );
+    proxy_get(&s.http, &url, auth).await
+}
+
+async fn handler_reports_list(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/reports",
+        reporting_service_url().trim_end_matches('/')
+    );
+    proxy_get(&s.http, &url, auth).await
+}
+
+async fn handler_reports_create(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/reports",
+        reporting_service_url().trim_end_matches('/')
+    );
+    proxy_post(&s.http, &url, auth, body).await
+}
+
+async fn handler_reports_update(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/reports/{id}",
+        reporting_service_url().trim_end_matches('/')
+    );
+    proxy_patch(&s.http, &url, auth, body).await
+}
+
+async fn handler_reports_delete(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let url = format!(
+        "{}/api/v1/reports/{id}",
+        reporting_service_url().trim_end_matches('/')
+    );
+    proxy_delete(&s.http, &url, auth).await
+}
+
+// ---------------------------------------------------------------------------
+// Observaboard proxy (admin-only)
+// ---------------------------------------------------------------------------
+
+async fn handler_observaboard_events(
+    State(s): State<DashState>,
+    headers: HeaderMap,
+    raw_query: Option<RawQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
+    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
+    let qs = raw_query.map(|RawQuery(q)| q).unwrap_or_default();
+    let url = format!(
+        "{}/api/events/?{qs}",
+        observaboard_url().trim_end_matches('/')
+    );
+    proxy_get(&s.http, &url, auth).await
+}
+
+// ---------------------------------------------------------------------------
 // Static HTML handlers
 // ---------------------------------------------------------------------------
 
@@ -1450,6 +1741,10 @@ async fn gold_html() -> Html<&'static str> {
 
 async fn portal_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/portal.html"))
+}
+
+async fn security_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/security.html"))
 }
 
 async fn provision_html() -> Html<&'static str> {
@@ -1478,6 +1773,18 @@ async fn messages_html() -> Html<&'static str> {
 
 async fn ai_logs_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/ai_logs.html"))
+}
+
+async fn search_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/search.html"))
+}
+
+async fn reports_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/reports.html"))
+}
+
+async fn observaboard_html() -> Html<&'static str> {
+    Html(include_str!("../../dashboard/static/observaboard.html"))
 }
 
 async fn auth_js() -> impl axum::response::IntoResponse {
@@ -1531,7 +1838,7 @@ async fn main() {
                 .collect();
             CorsLayer::new()
                 .allow_origin(AllowOrigin::list(headers))
-                .allow_methods([Method::GET, Method::POST])
+                .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::DELETE])
                 .allow_headers([header::CONTENT_TYPE])
         }
         _ => CorsLayer::new(),
@@ -1549,7 +1856,11 @@ async fn main() {
         .route("/messages", get(messages_html))
         .route("/ai-logs", get(ai_logs_html))
         .route("/portal", get(portal_html))
+        .route("/security", get(security_html))
         .route("/provision", get(provision_html))
+        .route("/search", get(search_html))
+        .route("/reports", get(reports_html))
+        .route("/observaboard", get(observaboard_html))
         .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
@@ -1563,10 +1874,16 @@ async fn main() {
         .route("/api/contact", post(handler_contact_submit))
         .route("/api/contacts", get(handler_contact_inbox))
         .route("/api/ai-logs", get(handler_ai_logs))
+        .route("/api/security", get(handler_security))
         .route("/api/portal/projects", get(handler_portal_projects))
         .route("/api/portal/projects/{id}/milestones", get(handler_portal_milestones))
         .route("/api/portal/projects/{id}/messages", get(handler_portal_messages).post(handler_portal_send_message))
         .route("/api/portal/milestones/{id}/deliverables", get(handler_portal_deliverables))
+        .route("/api/search", get(handler_search))
+        .route("/api/reports/dashboard", get(handler_reports_dashboard))
+        .route("/api/reports", get(handler_reports_list).post(handler_reports_create))
+        .route("/api/reports/{id}", patch(handler_reports_update).delete(handler_reports_delete))
+        .route("/api/observaboard/events", get(handler_observaboard_events))
         .route("/api/provision/projects", post(handler_provision_create_project))
         .route("/api/provision/projects/{id}/milestones", post(handler_provision_create_milestone))
         .route("/api/provision/milestones/{id}/deliverables", post(handler_provision_create_deliverable))

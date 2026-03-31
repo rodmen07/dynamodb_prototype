@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Security Posture</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:24px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:130px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-value.green{color:#15803d}
+    .stat-value.blue{color:#1d4ed8}
+    .stat-value.muted{color:#6b7280;font-size:1rem}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    .demo-banner{background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 14px;font-size:.82rem;color:#92400e;margin-bottom:16px}
+    .refresh{font-size:.8rem;color:#888;margin-bottom:8px}
+    .category{margin-bottom:28px}
+    .category-header{font-size:1rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#1a1a2e;margin:0 0 10px;padding-bottom:6px;border-bottom:2px solid #e5e7eb}
+    table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:4px}
+    th{background:#f4f4f7;padding:10px 12px;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#555}
+    td{border-top:1px solid #eee;padding:10px 12px;vertical-align:top;font-size:.875rem}
+    .badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.75rem;font-weight:600}
+    .badge-enabled{background:#dcfce7;color:#15803d}
+    .badge-monitored{background:#dbeafe;color:#1d4ed8}
+    .badge-configured{background:#f3f4f6;color:#4b5563}
+    .soc2-ref{font-family:monospace;font-size:.78rem;color:#6b7280;background:#f3f4f6;padding:1px 6px;border-radius:4px}
+    .detail{font-size:.82rem;color:#555}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('security'); DashAuth.guardPortalPage();</script>
+  <h1>Security Posture</h1>
+  <p class="sub">Security controls protecting your provisioned infrastructure. SOC 2 Type II control mapping with real-time status.</p>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total Controls</div><div class="stat-value" id="cnt-total">—</div></div>
+    <div class="stat"><div class="stat-label">Enabled</div><div class="stat-value green" id="cnt-enabled">—</div></div>
+    <div class="stat"><div class="stat-label">Monitored</div><div class="stat-value blue" id="cnt-monitored">—</div></div>
+    <div class="stat"><div class="stat-label">Last Assessed</div><div class="stat-value muted" id="cnt-assessed">—</div></div>
+  </div>
+  <div class="refresh" id="refresh-note"></div>
+  <div id="demo-banner" class="demo-banner" style="display:none">Showing baseline security posture. Live data will replace this once infrastructure scanning is configured.</div>
+  <div id="status-msg" class="status loading">Loading security posture…</div>
+  <div id="categories"></div>
+  <script>
+    function badgeClass(status) {
+      if (status === 'enabled') return 'badge badge-enabled';
+      if (status === 'monitored') return 'badge badge-monitored';
+      return 'badge badge-configured';
+    }
+
+    function renderSummary(summary) {
+      if (!summary) return;
+      document.getElementById('cnt-total').textContent = summary.total_controls || 0;
+      document.getElementById('cnt-enabled').textContent = summary.enabled || 0;
+      document.getElementById('cnt-monitored').textContent = summary.monitored || 0;
+      if (summary.last_assessed) {
+        try {
+          document.getElementById('cnt-assessed').textContent = new Date(summary.last_assessed).toLocaleDateString();
+        } catch (_) {
+          document.getElementById('cnt-assessed').textContent = summary.last_assessed;
+        }
+      }
+    }
+
+    function renderCategories(categories) {
+      var container = document.getElementById('categories');
+      container.innerHTML = '';
+      if (!categories || !categories.length) return;
+
+      categories.forEach(function (cat) {
+        var section = document.createElement('div');
+        section.className = 'category';
+        var header = document.createElement('h2');
+        header.className = 'category-header';
+        header.textContent = cat.name;
+        section.appendChild(header);
+
+        var table = document.createElement('table');
+        table.innerHTML =
+          '<thead><tr><th>Control</th><th>Status</th><th>Resource</th><th>SOC 2</th><th>Detail</th></tr></thead>';
+        var tbody = document.createElement('tbody');
+
+        (cat.controls || []).forEach(function (c) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td style="font-weight:600">' + (c.control || '—') + '</td>' +
+            '<td><span class="' + badgeClass(c.status) + '">' + (c.status || '—') + '</span></td>' +
+            '<td style="font-size:.82rem">' + (c.resource || '—') + '</td>' +
+            '<td><span class="soc2-ref">' + (c.soc2_ref || '—') + '</span></td>' +
+            '<td class="detail">' + (c.detail || '—') + '</td>';
+          tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        section.appendChild(table);
+        container.appendChild(section);
+      });
+    }
+
+    async function load() {
+      var statusEl = document.getElementById('status-msg');
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading security posture…';
+      statusEl.style.display = '';
+      document.getElementById('categories').innerHTML = '';
+      try {
+        var res = await DashAuth.authFetch('/api/security');
+        if (!res.ok) throw new Error('API error ' + res.status);
+        var data = await res.json();
+        renderSummary(data.summary);
+        renderCategories(data.categories);
+        if (data._demo) {
+          document.getElementById('demo-banner').style.display = '';
+        }
+        statusEl.style.display = 'none';
+      } catch (e) {
+        statusEl.className = 'status error';
+        statusEl.textContent = 'Error loading security posture: ' + e.message;
+      }
+    }
+
+    load();
+    document.getElementById('refresh-note').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    setInterval(function () {
+      document.getElementById('refresh-note').textContent = 'Last updated: ' + new Date().toLocaleTimeString();
+    }, 1000);
+    setInterval(load, 60000);
+  </script>
+</body>
+</html>

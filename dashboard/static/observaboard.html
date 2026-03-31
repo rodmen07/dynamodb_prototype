@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Observaboard</title>
+  <style>
+    *{box-sizing:border-box}
+    body{font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0;padding:24px;background:#f8f9fb;color:#1a1a2e}
+    nav{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+    nav a{padding:6px 14px;border-radius:6px;text-decoration:none;font-size:.875rem;background:#fff;border:1px solid #ddd;color:#333}
+    nav a.active,nav a:hover{background:#1a1a2e;color:#fff;border-color:#1a1a2e}
+    h1{margin:0 0 4px}
+    p.sub{color:#666;margin:0 0 20px;font-size:.9rem}
+    .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+    .filters select,.filters input{padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;outline:none;background:#fff}
+    .filters select:focus,.filters input:focus{border-color:#1a1a2e}
+    .filters input{flex:1;min-width:160px}
+    .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+    .stat{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:14px 20px;min-width:130px}
+    .stat-label{font-size:.75rem;color:#888;text-transform:uppercase;letter-spacing:.05em}
+    .stat-value{font-size:1.6rem;font-weight:700;margin-top:2px}
+    .stat-value.blue{color:#1d4ed8}
+    .status{padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:.9rem}
+    .status.loading{background:#eef2ff;color:#3730a3}
+    .status.error{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+    table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+    th{background:#f4f4f7;padding:10px 12px;text-align:left;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:#555}
+    td{border-top:1px solid #eee;padding:10px 12px;vertical-align:top;font-size:.875rem}
+    tr.expandable{cursor:pointer}
+    tr.expandable:hover td{background:#fafafa}
+    .badge{display:inline-block;padding:2px 10px;border-radius:9999px;font-size:.72rem;font-weight:600}
+    .sev-critical{background:#fef2f2;color:#b91c1c}
+    .sev-high{background:#fff7ed;color:#c2410c}
+    .sev-medium{background:#fefce8;color:#a16207}
+    .sev-low{background:#f0fdf4;color:#15803d}
+    .cat-deployment{background:#dbeafe;color:#1d4ed8}
+    .cat-security{background:#fef2f2;color:#b91c1c}
+    .cat-alert{background:#fff7ed;color:#c2410c}
+    .cat-metric{background:#f3e8ff;color:#7c3aed}
+    .cat-info{background:#f3f4f6;color:#4b5563}
+    .payload-row td{padding:0;border-top:none}
+    .payload-wrap{background:#f8f9fb;padding:12px 16px;font-family:monospace;font-size:.78rem;white-space:pre-wrap;word-break:break-all;border-top:1px dashed #e5e7eb}
+    .pager{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:16px;font-size:.85rem}
+    .pager button{padding:6px 14px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer;font-size:.82rem}
+    .pager button:disabled{opacity:.4;cursor:default}
+    .pager button:hover:not(:disabled){background:#f3f4f6}
+    .empty{text-align:center;color:#9ca3af;padding:40px 20px;font-size:.9rem}
+  </style>
+</head>
+<body>
+  <nav id="main-nav"></nav>
+  <script src="/auth.js"></script>
+  <script>DashAuth.renderNav('observaboard'); DashAuth.guardPortalPage();</script>
+  <h1>Observaboard</h1>
+  <p class="sub">Centralized event stream — deployments, security alerts, metrics, and infrastructure events.</p>
+  <div class="filters">
+    <input type="text" id="f-search" placeholder="Search events...">
+    <select id="f-category">
+      <option value="">All categories</option>
+      <option value="deployment">Deployment</option>
+      <option value="security">Security</option>
+      <option value="alert">Alert</option>
+      <option value="metric">Metric</option>
+      <option value="info">Info</option>
+    </select>
+    <select id="f-severity">
+      <option value="">All severities</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+    <select id="f-source">
+      <option value="">All sources</option>
+    </select>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Total Events</div><div class="stat-value blue" id="cnt-total">--</div></div>
+  </div>
+  <div id="status-msg" class="status loading">Loading events...</div>
+  <table id="events-table" style="display:none">
+    <thead>
+      <tr><th>Time</th><th>Source</th><th>Type</th><th>Category</th><th>Severity</th><th>Summary</th></tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty-msg" class="empty" style="display:none">No events match the current filters.</div>
+  <div class="pager" id="pager" style="display:none">
+    <button id="btn-prev" disabled>Previous</button>
+    <span id="page-info"></span>
+    <button id="btn-next" disabled>Next</button>
+  </div>
+  <script>
+    var nextUrl = null;
+    var prevUrl = null;
+    var expanded = {};
+
+    function buildQs() {
+      var params = [];
+      var search = document.getElementById('f-search').value.trim();
+      var cat = document.getElementById('f-category').value;
+      var sev = document.getElementById('f-severity').value;
+      var src = document.getElementById('f-source').value;
+      if (search) params.push('search=' + encodeURIComponent(search));
+      if (cat) params.push('category=' + encodeURIComponent(cat));
+      if (sev) params.push('severity=' + encodeURIComponent(sev));
+      if (src) params.push('source=' + encodeURIComponent(src));
+      return params.join('&');
+    }
+
+    function loadEvents(overrideQs) {
+      var statusEl = document.getElementById('status-msg');
+      statusEl.style.display = 'block';
+      statusEl.className = 'status loading';
+      statusEl.textContent = 'Loading events...';
+
+      var qs = overrideQs !== undefined ? overrideQs : buildQs();
+      var url = '/api/observaboard/events' + (qs ? '?' + qs : '');
+
+      DashAuth.authFetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          statusEl.style.display = 'none';
+          document.getElementById('cnt-total').textContent = data.count || 0;
+          nextUrl = data.next;
+          prevUrl = data.previous;
+          var events = data.results || [];
+          renderEvents(events);
+          updatePager(data.count || 0, events.length);
+          populateSources(events);
+        })
+        .catch(function(err) {
+          statusEl.className = 'status error';
+          statusEl.textContent = 'Failed to load events: ' + err.message;
+        });
+    }
+
+    function renderEvents(events) {
+      var table = document.getElementById('events-table');
+      var emptyMsg = document.getElementById('empty-msg');
+      var tbody = document.getElementById('tbody');
+
+      if (!events.length) {
+        table.style.display = 'none';
+        emptyMsg.style.display = 'block';
+        return;
+      }
+      emptyMsg.style.display = 'none';
+      table.style.display = 'table';
+
+      tbody.innerHTML = events.map(function(ev) {
+        var time = ev.created_at ? new Date(ev.created_at).toLocaleString() : '--';
+        var sevCls = 'badge sev-' + (ev.severity || 'low');
+        var catCls = 'badge cat-' + (ev.category || 'info');
+        var rowId = 'ev-' + ev.id;
+        var isExpanded = expanded[ev.id];
+        var mainRow = '<tr class="expandable" onclick="toggleRow(' + ev.id + ')">'
+          + '<td style="white-space:nowrap">' + esc(time) + '</td>'
+          + '<td>' + esc(ev.source || '--') + '</td>'
+          + '<td>' + esc(ev.event_type || '--') + '</td>'
+          + '<td><span class="' + catCls + '">' + esc(ev.category || '--') + '</span></td>'
+          + '<td><span class="' + sevCls + '">' + esc(ev.severity || '--') + '</span></td>'
+          + '<td>' + esc(ev.summary || '') + '</td>'
+          + '</tr>';
+        var payloadRow = '<tr class="payload-row" id="' + rowId + '" style="display:' + (isExpanded ? 'table-row' : 'none') + '">'
+          + '<td colspan="6"><div class="payload-wrap">' + esc(JSON.stringify(ev.raw_payload || {}, null, 2)) + '</div></td>'
+          + '</tr>';
+        return mainRow + payloadRow;
+      }).join('');
+    }
+
+    function toggleRow(id) {
+      var el = document.getElementById('ev-' + id);
+      if (!el) return;
+      var show = el.style.display === 'none';
+      el.style.display = show ? 'table-row' : 'none';
+      expanded[id] = show;
+    }
+
+    function updatePager(total, shown) {
+      var pager = document.getElementById('pager');
+      var btnPrev = document.getElementById('btn-prev');
+      var btnNext = document.getElementById('btn-next');
+      var info = document.getElementById('page-info');
+
+      if (total <= shown && !prevUrl) {
+        pager.style.display = 'none';
+        return;
+      }
+      pager.style.display = 'flex';
+      btnPrev.disabled = !prevUrl;
+      btnNext.disabled = !nextUrl;
+      info.textContent = 'Showing ' + shown + ' of ' + total;
+    }
+
+    function populateSources(events) {
+      var sel = document.getElementById('f-source');
+      var current = sel.value;
+      var sources = {};
+      events.forEach(function(ev) { if (ev.source) sources[ev.source] = true; });
+      var existing = {};
+      for (var i = 1; i < sel.options.length; i++) existing[sel.options[i].value] = true;
+      Object.keys(sources).sort().forEach(function(s) {
+        if (!existing[s]) {
+          var opt = document.createElement('option');
+          opt.value = s;
+          opt.textContent = s;
+          sel.appendChild(opt);
+        }
+      });
+      sel.value = current;
+    }
+
+    function extractQs(fullUrl) {
+      if (!fullUrl) return '';
+      var idx = fullUrl.indexOf('?');
+      return idx >= 0 ? fullUrl.substring(idx + 1) : '';
+    }
+
+    document.getElementById('btn-prev').addEventListener('click', function() {
+      if (prevUrl) loadEvents(extractQs(prevUrl));
+    });
+    document.getElementById('btn-next').addEventListener('click', function() {
+      if (nextUrl) loadEvents(extractQs(nextUrl));
+    });
+
+    var filterTimer;
+    ['f-search', 'f-category', 'f-severity', 'f-source'].forEach(function(id) {
+      document.getElementById(id).addEventListener('change', function() { loadEvents(); });
+      if (id === 'f-search') {
+        document.getElementById(id).addEventListener('input', function() {
+          clearTimeout(filterTimer);
+          filterTimer = setTimeout(function() { loadEvents(); }, 400);
+        });
+      }
+    });
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(s || ''));
+      return d.innerHTML;
+    }
+
+    loadEvents();
+  </script>
+</body>
+</html>
