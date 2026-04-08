@@ -1127,10 +1127,6 @@ fn reporting_service_url() -> String {
         .unwrap_or_else(|_| "http://localhost:8002".to_string())
 }
 
-fn observaboard_url() -> String {
-    std::env::var("OBSERVABOARD_URL")
-        .unwrap_or_else(|_| "http://localhost:8003".to_string())
-}
 
 async fn proxy_get(
     http: &reqwest::Client,
@@ -1796,43 +1792,7 @@ async fn handler_reports_delete(
     proxy_delete(&s.http, &url, auth).await
 }
 
-// ---------------------------------------------------------------------------
-// Observaboard proxy (admin-only)
-// ---------------------------------------------------------------------------
 
-async fn handler_observaboard_events(
-    State(s): State<DashState>,
-    headers: HeaderMap,
-    RawQuery(raw_query): RawQuery,
-) -> Result<Json<Value>, (StatusCode, String)> {
-    require_admin(&headers).map_err(|e| (e, "unauthorized".to_string()))?;
-    let auth = headers.get("Authorization").and_then(|v| v.to_str().ok());
-    let qs = raw_query.unwrap_or_default();
-    let url = format!(
-        "{}/api/events/?{qs}",
-        observaboard_url().trim_end_matches('/')
-    );
-    if let Ok(r) = proxy_get(&s.http, &url, auth).await {
-        return Ok(r);
-    }
-    // Demo events covering deployment, security, alert, metric, and info categories
-    Ok(Json(serde_json::json!({
-        "count": 8,
-        "next": null,
-        "previous": null,
-        "results": [
-            {"id":1,"source":"github-actions","event_type":"workflow_run.completed","category":"deployment","severity":"low","summary":"Deploy auth-service v1.2.4 to Cloud Run (us-central1) — all health checks passed","raw_payload":{"repo":"auth-service","branch":"main","commit":"a1b2c3d","status":"success","duration_s":142},"classified":true,"created_at":"2026-03-31T06:45:00Z"},
-            {"id":2,"source":"gcp-security-command-center","event_type":"finding.created","category":"security","severity":"high","summary":"IAM policy change detected — service account granted roles/editor on project rm-cloud-prod","raw_payload":{"finding_id":"SCC-2026-0331-001","resource":"projects/rm-cloud-prod","actor":"admin@rmcloud.dev","action":"SetIamPolicy"},"classified":true,"created_at":"2026-03-31T05:12:00Z"},
-            {"id":3,"source":"fly-machines","event_type":"machine.scaled","category":"metric","severity":"low","summary":"dynamodb-dashboard-rodmen07 scaled from 0 → 1 machine (iad region, wake-on-request)","raw_payload":{"app":"dynamodb-dashboard-rodmen07","region":"iad","from":0,"to":1,"trigger":"http_request"},"classified":true,"created_at":"2026-03-31T04:30:00Z"},
-            {"id":4,"source":"github-dependabot","event_type":"alert.created","category":"security","severity":"medium","summary":"CVE-2026-1234 in tokio-rustls 0.25.x — upgrade to 0.26.0 recommended","raw_payload":{"cve":"CVE-2026-1234","package":"tokio-rustls","severity":"moderate","repo":"microservices","pr_url":"#412"},"classified":true,"created_at":"2026-03-30T22:00:00Z"},
-            {"id":5,"source":"cloud-run","event_type":"revision.deployed","category":"deployment","severity":"low","summary":"projects-service revision projects-service-00014 deployed — 0 → 1 instances, healthy","raw_payload":{"service":"projects-service","revision":"projects-service-00014","region":"us-central1","image_tag":"abc123f"},"classified":true,"created_at":"2026-03-30T18:15:00Z"},
-            {"id":6,"source":"uptime-monitor","event_type":"check.recovered","category":"alert","severity":"medium","summary":"go-gateway health endpoint recovered after 4m32s downtime (cold start after scale-to-zero)","raw_payload":{"monitor":"go-gateway-health","downtime_s":272,"region":"us-central1","status_code":200},"classified":true,"created_at":"2026-03-30T15:48:00Z"},
-            {"id":7,"source":"medallion-pipeline","event_type":"gold.metric_published","category":"metric","severity":"low","summary":"Gold metrics batch published — 24 SOC 2 controls evaluated, 22 passing, 2 monitored","raw_payload":{"batch_id":"gold-2026-0330","controls_total":24,"controls_passing":22,"controls_monitored":2,"pipeline_stage":"gold"},"classified":true,"created_at":"2026-03-30T12:00:00Z"},
-            {"id":8,"source":"github-actions","event_type":"workflow_run.completed","category":"info","severity":"low","summary":"CI pipeline for frontend-service completed — build + lint + type-check passed in 1m48s","raw_payload":{"repo":"frontend-service","branch":"main","commit":"def456g","workflow":"ci","duration_s":108,"status":"success"},"classified":true,"created_at":"2026-03-30T10:30:00Z"}
-        ],
-        "_demo": true
-    })))
-}
 
 // ---------------------------------------------------------------------------
 // Static HTML handlers
@@ -1898,9 +1858,6 @@ async fn reports_html() -> Html<&'static str> {
     Html(include_str!("../../dashboard/static/reports.html"))
 }
 
-async fn observaboard_html() -> Html<&'static str> {
-    Html(include_str!("../../dashboard/static/observaboard.html"))
-}
 
 async fn auth_js() -> impl axum::response::IntoResponse {
     (
@@ -1975,7 +1932,7 @@ async fn main() {
         .route("/provision", get(provision_html))
         .route("/search", get(search_html))
         .route("/reports", get(reports_html))
-        .route("/observaboard", get(observaboard_html))
+
         .route("/auth.js", get(auth_js))
         .route("/api/stats", get(handler_stats))
         .route("/api/gold", get(handler_gold))
@@ -1998,7 +1955,7 @@ async fn main() {
         .route("/api/reports/dashboard", get(handler_reports_dashboard))
         .route("/api/reports", get(handler_reports_list).post(handler_reports_create))
         .route("/api/reports/{id}", patch(handler_reports_update).delete(handler_reports_delete))
-        .route("/api/observaboard/events", get(handler_observaboard_events))
+
         .route("/api/provision/projects", post(handler_provision_create_project))
         .route("/api/provision/projects/{id}/milestones", post(handler_provision_create_milestone))
         .route("/api/provision/milestones/{id}/deliverables", post(handler_provision_create_deliverable))

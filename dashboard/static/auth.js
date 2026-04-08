@@ -17,7 +17,6 @@
     { key: 'provision',      label: 'Provision',      href: '/provision',      admin: true  },
     { key: 'search',         label: 'Search',         href: '/search',         admin: true  },
     { key: 'reports',        label: 'Reports',        href: '/reports',        admin: true  },
-    { key: 'observaboard',   label: 'Observaboard',   href: '/observaboard',   admin: true  },
   ];
 
   function getToken() {
