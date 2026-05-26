@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-aws-config = "1.5"
+aws-config = "1.8"
 aws-sdk-dynamodb = "1.110"
 aws-sdk-cloudwatch = "1"
 aws-sdk-costexplorer = "1"
