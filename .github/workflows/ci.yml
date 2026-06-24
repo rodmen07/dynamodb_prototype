@@ -34,3 +34,13 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace -- --nocapture
+
+      - name: Audit dependencies for known vulnerabilities
+        # Informational: surfaces RustSec advisories in CI without blocking on
+        # advisories that have no fixed upstream release yet (e.g. rsa
+        # RUSTSEC-2023-0071). Tighten to a blocking gate once an audit.toml
+        # documenting accepted/ignored advisories is in place.
+        continue-on-error: true
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit

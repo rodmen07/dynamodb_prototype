@@ -19,6 +19,11 @@ WORKDIR /app
 # Copy the built binary
 COPY --from=builder /app/target/release/dashboard /usr/local/bin/dashboard
 
+# Run as an unprivileged user (SOC 2 CC6.8: containers must not run as root).
+RUN useradd --system --uid 1001 --user-group --no-create-home appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8080
 
 ENV RUST_LOG=info

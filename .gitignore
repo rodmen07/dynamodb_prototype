@@ -1,3 +1,19 @@
 /target
+target*/
 /awscliv2.zip
 /aws/
+
+# Editor crash-recovery / temp files
+*.tmp
+*.tmp.*
+*.bak
+*.orig
+
+# Environment / local secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
