@@ -126,9 +126,9 @@ dependencies = [
 
 [[package]]
 name = "aws-sdk-cloudwatch"
-version = "1.108.0"
+version = "1.109.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b74059630576b811889a65fdfff80c9e2b4b1f0a3af65c84cd5d3f8264e7f9c1"
+checksum = "6447208b6439be1c61a6e9ae0cb93bf0eccbbcc34b093b94830fde6c93943108"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
